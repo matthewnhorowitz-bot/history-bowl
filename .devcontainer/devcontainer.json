@@ -1,0 +1,15 @@
+{
+  "name": "History Bowl",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
+  "postCreateCommand": "npm install",
+  "forwardPorts": [5173, 3001],
+  "portsAttributes": {
+    "5173": { "label": "client (open this)", "onAutoForward": "openPreview" },
+    "3001": { "label": "server", "onAutoForward": "silent" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode"]
+    }
+  }
+}

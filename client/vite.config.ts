@@ -11,6 +11,8 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    host: true,            // bind 0.0.0.0 so cloud IDEs (Codespaces) can forward it
+    allowedHosts: true,    // accept the *.app.github.dev forwarded hostname
     proxy: {
       "/socket.io": {
         target: "http://localhost:3001",
