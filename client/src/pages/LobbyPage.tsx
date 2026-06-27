@@ -25,8 +25,15 @@ export default function LobbyPage() {
     function onHostChanged({ newHostId }: HostChangedPayload) {
       if (newHostId === myId) setIsHost(true);
     }
-    function onGameStarted(_: GameStartedPayload) {
-      navigate(`/game/${roomCode}`, { state: { myId, isHost, players } });
+    function onGameStarted({ questionNumber }: GameStartedPayload) {
+      // Pass an initial READING snapshot: the GamePage mounts after this event
+      // fires, so it would otherwise miss game-started and never leave LOBBY.
+      navigate(`/game/${roomCode}`, {
+        state: {
+          myId, isHost, players,
+          snapshot: { gameState: "READING", questionNumber, revealedWords: [], isPastPowerMark: false },
+        },
+      });
     }
 
     socket.on(E.S_PLAYER_JOINED, onPlayerJoined);

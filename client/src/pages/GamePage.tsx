@@ -111,6 +111,7 @@ export default function GamePage() {
           isHost={game.isHost}
           onNext={game.nextQuestion}
           questionNumber={game.questionNumber}
+          lastResult={game.lastResult}
         />
       )}
     </div>

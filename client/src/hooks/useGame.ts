@@ -158,7 +158,8 @@ export function useGame(roomCode: string, myId: string, isHostInit: boolean, ini
       clearWindow();
       setPromptName(null);
       setBuzzStatus(null);
-      setLastResult(null);
+      // Keep lastResult so the end-of-question overlay can show right/wrong.
+      // It's reset at the start of the next question by onGameStarted.
       applyScores(payload.scores);
       setQuestionEnd(payload);
       setGameState("BETWEEN");
