@@ -80,6 +80,10 @@ export interface WordRevealedPayload {
   isPowerMark: boolean;
 }
 
+export interface BuzzWindowPayload {
+  seconds: number;
+}
+
 export interface BuzzAcceptedPayload {
   buzzedBy: { id: string; name: string };
   wordIndex: number;

@@ -6,7 +6,7 @@ the right answer scores. Built with React + Vite (client) and Node.js + Express 
 
 ## Questions
 
-The app ships with **8,600 real tossups** parsed from every IAC National History Bowl packet
+The app ships with **8,465 real tossups** parsed from every IAC National History Bowl packet
 published on the [IAC resources page](https://www.iacompetitions.com/resources-national-history-bowl/)
 (regional A/B/C sets and national championships, 2014–2015 through 2024), bundled in
 `server/src/questions/iacQuestions.json`. Each game serves a freshly shuffled pool, and the

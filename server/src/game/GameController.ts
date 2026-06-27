@@ -5,6 +5,7 @@ import { maybeRefetch } from "../questions/questionCache";
 import {
   WORD_INTERVAL_MS,
   ANSWER_TIMER_S,
+  END_BUZZ_WINDOW_S,
   POWER_SCORE,
   CORRECT_SCORE,
   NEG_SCORE,
@@ -71,9 +72,22 @@ function startReadingLoop(io: Server, room: Room): void {
     if (room.wordsRevealed >= words.length) {
       clearInterval(room.readingTimer!);
       room.readingTimer = null;
-      endQuestion(io, room);
+      // Question is fully read — keep state READING and give everyone a few
+      // seconds to still buzz before the question ends.
+      startEndWindow(io, room);
     }
   }, WORD_INTERVAL_MS);
+}
+
+// After the question finishes reading, leave the room in READING (so buzzes are
+// still accepted) for a grace period, then end the question.
+function startEndWindow(io: Server, room: Room): void {
+  if (room.endWindowTimer) clearTimeout(room.endWindowTimer);
+  io.to(room.code).emit(E.S_BUZZ_WINDOW, { seconds: END_BUZZ_WINDOW_S });
+  room.endWindowTimer = setTimeout(() => {
+    room.endWindowTimer = null;
+    endQuestion(io, room);
+  }, END_BUZZ_WINDOW_S * 1000);
 }
 
 export function handleBuzz(io: Server, room: Room, socketId: string): boolean {
@@ -83,6 +97,10 @@ export function handleBuzz(io: Server, room: Room, socketId: string): boolean {
 
   clearInterval(room.readingTimer!);
   room.readingTimer = null;
+  if (room.endWindowTimer) {
+    clearTimeout(room.endWindowTimer);
+    room.endWindowTimer = null;
+  }
 
   room.state = "BUZZED";
   room.buzzedBy = socketId;
@@ -137,13 +155,16 @@ function handleAnswerResult(io: Server, room: Room, socketId: string, answer: st
     (p) => !room.lockedOut.has(p.id)
   );
 
-  const resumeReading = !correct && activePlayers.length > 0 && room.wordsRevealed < room.currentQuestion!.words.length;
+  const wordsLeft = room.wordsRevealed < room.currentQuestion!.words.length;
+  const stillActive = !correct && activePlayers.length > 0;
+  const resumeReading = stillActive && wordsLeft;   // resume reading the rest
+  const reopenWindow = stillActive && !wordsLeft;   // already fully read — give others the window
 
   io.to(room.code).emit(E.S_ANSWER_RESULT, {
     correct,
     delta,
     scores: getScores(room),
-    resumeReading,
+    resumeReading: resumeReading || reopenWindow,
     buzzedBy: { id: socketId, name: player?.name ?? "" },
     answer,
   });
@@ -153,6 +174,11 @@ function handleAnswerResult(io: Server, room: Room, socketId: string, answer: st
     room.state = "READING";
     io.to(room.code).emit(E.S_READING_RESUMED, { fromWordIndex: room.wordsRevealed });
     startReadingLoop(io, room);
+  } else if (reopenWindow) {
+    room.buzzedBy = null;
+    room.state = "READING";
+    io.to(room.code).emit(E.S_READING_RESUMED, { fromWordIndex: room.wordsRevealed });
+    startEndWindow(io, room);
   } else {
     endQuestion(io, room);
   }
@@ -166,6 +192,10 @@ function endQuestion(io: Server, room: Room): void {
   if (room.answerTimer) {
     clearTimeout(room.answerTimer);
     room.answerTimer = null;
+  }
+  if (room.endWindowTimer) {
+    clearTimeout(room.endWindowTimer);
+    room.endWindowTimer = null;
   }
 
   room.state = "BETWEEN";

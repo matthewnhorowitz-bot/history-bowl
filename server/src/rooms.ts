@@ -13,6 +13,7 @@ export interface Room {
   lockedOut: Set<string>;
   readingTimer: ReturnType<typeof setInterval> | null;
   answerTimer: ReturnType<typeof setTimeout> | null;
+  endWindowTimer: ReturnType<typeof setTimeout> | null;
   questionPool: Question[];
   questionNumber: number;
   cleanupTimer: ReturnType<typeof setTimeout> | null;
@@ -40,6 +41,7 @@ export function createRoom(code: string, hostSocketId: string, hostName: string)
     lockedOut: new Set(),
     readingTimer: null,
     answerTimer: null,
+    endWindowTimer: null,
     questionPool: [],
     questionNumber: 0,
     cleanupTimer: null,

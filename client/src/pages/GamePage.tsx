@@ -43,9 +43,6 @@ export default function GamePage() {
             <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.8rem", color: "var(--text-dim)" }}>
               Room: <strong style={{ color: "var(--text)", letterSpacing: "0.15em" }}>{roomCode}</strong>
             </span>
-            {game.questionNumber > 0 && (
-              <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>Q{game.questionNumber}</span>
-            )}
           </div>
         </div>
 
@@ -91,6 +88,7 @@ export default function GamePage() {
           myId={game.myId}
           lockedOut={game.lockedOut}
           answerTimerRemaining={game.answerTimerRemaining}
+          buzzWindowRemaining={game.buzzWindowRemaining}
           onBuzz={game.buzz}
           onSubmitAnswer={game.submitAnswer}
         />
