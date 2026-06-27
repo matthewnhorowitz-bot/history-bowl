@@ -1,0 +1,171 @@
+import { useEffect, useRef, useState, useCallback } from "react";
+import { useSocket } from "../context/SocketContext";
+import {
+  Player, GameState,
+  WordRevealedPayload, BuzzAcceptedPayload, AnswerResultPayload,
+  QuestionEndPayload, PlayerJoinedPayload, PlayerLeftPayload,
+  RoomJoinedPayload, GameStartedPayload, HostChangedPayload,
+  ReadingResumedPayload, ErrorPayload,
+} from "@shared/types";
+import * as E from "@shared/events";
+
+export interface GameHook {
+  gameState: GameState;
+  players: Player[];
+  revealedWords: string[];
+  isPastPowerMark: boolean;
+  buzzStatus: { buzzedBy: { id: string; name: string }; timerSeconds: number } | null;
+  answerTimerRemaining: number;
+  lastResult: AnswerResultPayload | null;
+  questionEnd: QuestionEndPayload | null;
+  isHost: boolean;
+  myId: string;
+  roomCode: string;
+  questionNumber: number;
+  lockedOut: boolean;
+  error: string | null;
+  buzz: () => void;
+  submitAnswer: (answer: string) => void;
+  startGame: () => void;
+  nextQuestion: () => void;
+  clearError: () => void;
+}
+
+export function useGame(roomCode: string, myId: string, isHostInit: boolean, initialPlayers: Player[]): GameHook {
+  const socket = useSocket();
+
+  const [gameState, setGameState] = useState<GameState>("LOBBY");
+  const [players, setPlayers] = useState<Player[]>(initialPlayers);
+  const [revealedWords, setRevealedWords] = useState<string[]>([]);
+  const [isPastPowerMark, setIsPastPowerMark] = useState(false);
+  const [buzzStatus, setBuzzStatus] = useState<GameHook["buzzStatus"]>(null);
+  const [answerTimerRemaining, setAnswerTimerRemaining] = useState(0);
+  const [lastResult, setLastResult] = useState<AnswerResultPayload | null>(null);
+  const [questionEnd, setQuestionEnd] = useState<QuestionEndPayload | null>(null);
+  const [isHost, setIsHost] = useState(isHostInit);
+  const [questionNumber, setQuestionNumber] = useState(0);
+  const [lockedOut, setLockedOut] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const clearError = useCallback(() => setError(null), []);
+
+  useEffect(() => {
+    function onPlayerJoined({ players: p }: PlayerJoinedPayload) { setPlayers(p); }
+    function onPlayerLeft({ players: p }: PlayerLeftPayload) { setPlayers(p); }
+
+    function onHostChanged({ newHostId }: HostChangedPayload) {
+      if (newHostId === myId) setIsHost(true);
+    }
+
+    function onGameStarted({ questionNumber: qn }: GameStartedPayload) {
+      setQuestionNumber(qn);
+      setRevealedWords([]);
+      setIsPastPowerMark(false);
+      setBuzzStatus(null);
+      setLastResult(null);
+      setQuestionEnd(null);
+      setLockedOut(false);
+      setGameState("READING");
+    }
+
+    function onWordRevealed({ word, isPowerMark }: WordRevealedPayload) {
+      const display = word === "(*)" ? null : word.replace("(*)", "");
+      if (display !== null) {
+        setRevealedWords((prev) => [...prev, display!]);
+      }
+      if (isPowerMark) setIsPastPowerMark(true);
+    }
+
+    function onBuzzAccepted({ buzzedBy, timerSeconds }: BuzzAcceptedPayload) {
+      setBuzzStatus({ buzzedBy, timerSeconds });
+      setGameState("ANSWER_PHASE");
+
+      // Local countdown
+      if (timerRef.current) clearInterval(timerRef.current);
+      setAnswerTimerRemaining(timerSeconds);
+      timerRef.current = setInterval(() => {
+        setAnswerTimerRemaining((t) => {
+          if (t <= 1) { clearInterval(timerRef.current!); return 0; }
+          return t - 1;
+        });
+      }, 1000);
+    }
+
+    function onAnswerResult(result: AnswerResultPayload) {
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      setLastResult(result);
+      if (!result.correct && result.buzzedBy.id === myId) setLockedOut(true);
+      if (!result.resumeReading) setBuzzStatus(null);
+    }
+
+    function onReadingResumed(_: ReadingResumedPayload) {
+      setBuzzStatus(null);
+      setGameState("READING");
+    }
+
+    function onQuestionEnd(payload: QuestionEndPayload) {
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      setBuzzStatus(null);
+      setLastResult(null);
+      setQuestionEnd(payload);
+      setGameState("BETWEEN");
+    }
+
+    function onError({ message }: ErrorPayload) {
+      setError(message);
+      setTimeout(() => setError(null), 3500);
+    }
+
+    socket.on(E.S_PLAYER_JOINED, onPlayerJoined);
+    socket.on(E.S_PLAYER_LEFT, onPlayerLeft);
+    socket.on(E.S_HOST_CHANGED, onHostChanged);
+    socket.on(E.S_GAME_STARTED, onGameStarted);
+    socket.on(E.S_WORD_REVEALED, onWordRevealed);
+    socket.on(E.S_BUZZ_ACCEPTED, onBuzzAccepted);
+    socket.on(E.S_ANSWER_RESULT, onAnswerResult);
+    socket.on(E.S_READING_RESUMED, onReadingResumed);
+    socket.on(E.S_QUESTION_END, onQuestionEnd);
+    socket.on(E.S_ERROR, onError);
+
+    return () => {
+      socket.off(E.S_PLAYER_JOINED, onPlayerJoined);
+      socket.off(E.S_PLAYER_LEFT, onPlayerLeft);
+      socket.off(E.S_HOST_CHANGED, onHostChanged);
+      socket.off(E.S_GAME_STARTED, onGameStarted);
+      socket.off(E.S_WORD_REVEALED, onWordRevealed);
+      socket.off(E.S_BUZZ_ACCEPTED, onBuzzAccepted);
+      socket.off(E.S_ANSWER_RESULT, onAnswerResult);
+      socket.off(E.S_READING_RESUMED, onReadingResumed);
+      socket.off(E.S_QUESTION_END, onQuestionEnd);
+      socket.off(E.S_ERROR, onError);
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [socket, myId]);
+
+  const buzz = useCallback(() => {
+    socket.emit(E.C_BUZZ, { roomCode, wordIndex: revealedWords.length, timestamp: Date.now() });
+  }, [socket, roomCode, revealedWords.length]);
+
+  const submitAnswer = useCallback((answer: string) => {
+    socket.emit(E.C_SUBMIT_ANSWER, { roomCode, answer });
+    setBuzzStatus(null);
+    setGameState("BETWEEN");
+  }, [socket, roomCode]);
+
+  const startGame = useCallback(() => {
+    socket.emit(E.C_START_GAME, { roomCode });
+  }, [socket, roomCode]);
+
+  const nextQuestion = useCallback(() => {
+    socket.emit(E.C_NEXT_QUESTION, { roomCode });
+  }, [socket, roomCode]);
+
+  return {
+    gameState, players, revealedWords, isPastPowerMark,
+    buzzStatus, answerTimerRemaining, lastResult, questionEnd,
+    isHost, myId, roomCode, questionNumber, lockedOut, error,
+    buzz, submitAnswer, startGame, nextQuestion, clearError,
+  };
+}

@@ -1,0 +1,103 @@
+:root {
+  --bg: #0f1117;
+  --bg-card: #1a1d27;
+  --bg-card-hover: #22263a;
+  --border: #2e3248;
+  --accent: #c9a84c;
+  --accent-dim: #8a6f2e;
+  --power: #4caf7d;
+  --danger: #e05555;
+  --text: #e8e4d9;
+  --text-dim: #8a8fa8;
+  --text-muted: #555a73;
+  --radius: 8px;
+  --font-mono: 'Courier New', monospace;
+}
+
+body {
+  font-family: 'Georgia', serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  transition: background 0.15s, opacity 0.15s, transform 0.1s;
+}
+
+button:active { transform: scale(0.97); }
+
+input {
+  font-family: inherit;
+  outline: none;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 1rem;
+  width: 100%;
+}
+
+input:focus { border-color: var(--accent); }
+
+a { color: var(--accent); text-decoration: none; }
+
+.btn-primary {
+  background: var(--accent);
+  color: #0f1117;
+  font-weight: 700;
+  padding: 12px 28px;
+  border-radius: var(--radius);
+  font-size: 1rem;
+  letter-spacing: 0.02em;
+}
+
+.btn-primary:hover { background: #d9ba68; }
+.btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.btn-secondary {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 10px 22px;
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+}
+
+.btn-secondary:hover { background: var(--bg-card-hover); }
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+}
+
+.error-toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--danger);
+  color: #fff;
+  padding: 10px 22px;
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+  z-index: 1000;
+  animation: fadeInOut 3s ease forwards;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  75% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.word { display: inline; }
+.word-power { color: var(--power); }
