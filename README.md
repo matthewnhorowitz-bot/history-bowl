@@ -41,6 +41,14 @@ Then open <http://localhost:5173> in two browser tabs:
 2. Tab 2: enter a name + the room code → **Join**.
 3. Host clicks **Start Game**. Press **Space** to buzz, type your answer, hit Enter.
 
+## Deploy (always-on, free)
+
+The repo includes a [`render.yaml`](render.yaml) blueprint. On [Render](https://render.com):
+**New → Blueprint → pick this repo → Apply**. It builds the client, then runs a
+single Node service that serves the built client *and* the Socket.io server, so
+players just open the Render URL — no accounts needed. Production builds the
+client to `client/dist`, which the server serves automatically.
+
 ## Project layout
 
 - `shared/` — types, socket event names, constants shared by client and server

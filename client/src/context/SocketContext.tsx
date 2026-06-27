@@ -7,7 +7,7 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
   const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
-    const s = io({ transports: ["websocket"] });
+    const s = io({ transports: ["websocket", "polling"] });
     setSocket(s);
     return () => { s.disconnect(); };
   }, []);
