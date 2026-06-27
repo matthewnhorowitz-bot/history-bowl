@@ -55,11 +55,21 @@ export interface LeaveRoomPayload {
 }
 
 // Socket payload types — Server → Client
+// Snapshot of an in-progress game, sent to a player who joins late.
+export interface GameSnapshot {
+  gameState: GameState;
+  questionNumber: number;
+  revealedWords: string[];
+  isPastPowerMark: boolean;
+}
+
 export interface RoomJoinedPayload {
   roomCode: string;
   players: Player[];
   isHost: boolean;
   playerId: string;
+  inProgress?: boolean;
+  snapshot?: GameSnapshot;
 }
 
 export interface PlayerJoinedPayload {

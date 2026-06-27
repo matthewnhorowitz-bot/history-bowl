@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useSocket } from "../context/SocketContext";
 import {
-  Player, GameState,
+  Player, GameState, GameSnapshot,
   WordRevealedPayload, BuzzAcceptedPayload, AnswerResultPayload,
   QuestionEndPayload, PlayerJoinedPayload, PlayerLeftPayload,
   RoomJoinedPayload, GameStartedPayload, HostChangedPayload,
@@ -34,13 +34,13 @@ export interface GameHook {
   clearError: () => void;
 }
 
-export function useGame(roomCode: string, myId: string, isHostInit: boolean, initialPlayers: Player[]): GameHook {
+export function useGame(roomCode: string, myId: string, isHostInit: boolean, initialPlayers: Player[], initialSnapshot?: GameSnapshot): GameHook {
   const socket = useSocket();
 
-  const [gameState, setGameState] = useState<GameState>("LOBBY");
+  const [gameState, setGameState] = useState<GameState>(initialSnapshot?.gameState ?? "LOBBY");
   const [players, setPlayers] = useState<Player[]>(initialPlayers);
-  const [revealedWords, setRevealedWords] = useState<string[]>([]);
-  const [isPastPowerMark, setIsPastPowerMark] = useState(false);
+  const [revealedWords, setRevealedWords] = useState<string[]>(initialSnapshot?.revealedWords ?? []);
+  const [isPastPowerMark, setIsPastPowerMark] = useState(initialSnapshot?.isPastPowerMark ?? false);
   const [buzzStatus, setBuzzStatus] = useState<GameHook["buzzStatus"]>(null);
   const [answerTimerRemaining, setAnswerTimerRemaining] = useState(0);
   const [buzzWindowRemaining, setBuzzWindowRemaining] = useState(0);
@@ -49,7 +49,7 @@ export function useGame(roomCode: string, myId: string, isHostInit: boolean, ini
   const [lastResult, setLastResult] = useState<AnswerResultPayload | null>(null);
   const [questionEnd, setQuestionEnd] = useState<QuestionEndPayload | null>(null);
   const [isHost, setIsHost] = useState(isHostInit);
-  const [questionNumber, setQuestionNumber] = useState(0);
+  const [questionNumber, setQuestionNumber] = useState(initialSnapshot?.questionNumber ?? 0);
   const [lockedOut, setLockedOut] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -133,10 +133,15 @@ export function useGame(roomCode: string, myId: string, isHostInit: boolean, ini
       startAnswerCountdown(timerSeconds);
     }
 
+    function applyScores(scores: Record<string, number>) {
+      setPlayers((prev) => prev.map((p) => (p.id in scores ? { ...p, score: scores[p.id] } : p)));
+    }
+
     function onAnswerResult(result: AnswerResultPayload) {
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
       setPromptName(null);
       setLastResult(result);
+      applyScores(result.scores);
       if (!result.correct && result.buzzedBy.id === myId) setLockedOut(true);
       if (!result.resumeReading) setBuzzStatus(null);
     }
@@ -154,6 +159,7 @@ export function useGame(roomCode: string, myId: string, isHostInit: boolean, ini
       setPromptName(null);
       setBuzzStatus(null);
       setLastResult(null);
+      applyScores(payload.scores);
       setQuestionEnd(payload);
       setGameState("BETWEEN");
     }

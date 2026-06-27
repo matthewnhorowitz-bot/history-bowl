@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { Player } from "@shared/types";
+import { Player, GameSnapshot } from "@shared/types";
 import { useGame } from "../hooks/useGame";
 import { useKeyboard } from "../hooks/useKeyboard";
 import QuestionDisplay from "../components/QuestionDisplay";
@@ -10,7 +10,7 @@ import QuestionEndOverlay from "../components/QuestionEndOverlay";
 
 export default function GamePage() {
   const { roomCode } = useParams<{ roomCode: string }>();
-  const { state } = useLocation() as { state: { myId: string; isHost: boolean; players: Player[] } };
+  const { state } = useLocation() as { state: { myId: string; isHost: boolean; players: Player[]; snapshot?: GameSnapshot } };
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -21,7 +21,8 @@ export default function GamePage() {
     roomCode ?? "",
     state?.myId ?? "",
     state?.isHost ?? false,
-    state?.players ?? []
+    state?.players ?? [],
+    state?.snapshot
   );
 
   useKeyboard(game.buzz, game.gameState === "READING" && !game.lockedOut);

@@ -37,11 +37,6 @@ export function registerRoomHandlers(io: Server, socket: Socket): void {
       return;
     }
 
-    if (room.state !== "LOBBY") {
-      socket.emit(E.S_ERROR, { message: "Game already in progress", code: "GAME_IN_PROGRESS" });
-      return;
-    }
-
     const nameTaken = Array.from(room.players.values()).some((p) => p.name.toLowerCase() === name.toLowerCase());
     if (nameTaken) {
       socket.emit(E.S_ERROR, { message: "Name already taken", code: "NAME_TAKEN" });
@@ -51,11 +46,26 @@ export function registerRoomHandlers(io: Server, socket: Socket): void {
     room.players.set(socket.id, { id: socket.id, name, score: 0, isHost: false });
     socket.join(code);
 
+    // Late join: hand the new player a snapshot so they drop straight into the game.
+    const inProgress = room.state !== "LOBBY";
+    const snapshot = inProgress
+      ? {
+          gameState: room.state,
+          questionNumber: room.questionNumber,
+          revealedWords: room.currentQuestion
+            ? room.currentQuestion.words.slice(0, room.wordsRevealed)
+            : [],
+          isPastPowerMark: room.wordsRevealed > room.powerMarkIndex,
+        }
+      : undefined;
+
     socket.emit(E.S_ROOM_JOINED, {
       roomCode: code,
       players: getPlayers(room),
       isHost: false,
       playerId: socket.id,
+      inProgress,
+      snapshot,
     });
 
     socket.to(code).emit(E.S_PLAYER_JOINED, { players: getPlayers(room) });
