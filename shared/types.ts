@@ -90,6 +90,11 @@ export interface BuzzAcceptedPayload {
   timerSeconds: number;
 }
 
+export interface PromptPayload {
+  buzzedBy: { id: string; name: string };
+  timerSeconds: number;
+}
+
 export interface AnswerResultPayload {
   correct: boolean;
   delta: number;

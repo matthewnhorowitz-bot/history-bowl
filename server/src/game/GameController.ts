@@ -1,6 +1,6 @@
 import { Server } from "socket.io";
 import { Room } from "../rooms";
-import { validateAnswer } from "../utils/answerValidator";
+import { judgeAnswer } from "../utils/answerValidator";
 import { maybeRefetch } from "../questions/questionCache";
 import {
   WORD_INTERVAL_MS,
@@ -105,6 +105,7 @@ export function handleBuzz(io: Server, room: Room, socketId: string): boolean {
   room.state = "BUZZED";
   room.buzzedBy = socketId;
   room.buzzedAtWord = room.wordsRevealed - 1; // last word that was revealed
+  room.prompted = false;
 
   const player = room.players.get(socketId)!;
   room.state = "ANSWER_PHASE";
@@ -130,8 +131,23 @@ export function handleSubmitAnswer(io: Server, room: Room, socketId: string, ans
   clearTimeout(room.answerTimer!);
   room.answerTimer = null;
 
-  const correct = validateAnswer(answer, room.currentQuestion!.answer);
-  handleAnswerResult(io, room, socketId, answer, correct);
+  const verdict = judgeAnswer(answer, room.currentQuestion!.answer);
+
+  // Close answer (or a "prompt on X" match) → give the same player one more try.
+  if (verdict === "prompt" && !room.prompted) {
+    room.prompted = true;
+    const player = room.players.get(socketId);
+    io.to(room.code).emit(E.S_PROMPT, {
+      buzzedBy: { id: socketId, name: player?.name ?? "" },
+      timerSeconds: ANSWER_TIMER_S,
+    });
+    room.answerTimer = setTimeout(() => {
+      handleAnswerResult(io, room, socketId, "", false);
+    }, ANSWER_TIMER_S * 1000);
+    return;
+  }
+
+  handleAnswerResult(io, room, socketId, answer, verdict === "correct");
 }
 
 function handleAnswerResult(io: Server, room: Room, socketId: string, answer: string, correct: boolean): void {

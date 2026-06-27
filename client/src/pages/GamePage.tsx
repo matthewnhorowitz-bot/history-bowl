@@ -89,6 +89,8 @@ export default function GamePage() {
           lockedOut={game.lockedOut}
           answerTimerRemaining={game.answerTimerRemaining}
           buzzWindowRemaining={game.buzzWindowRemaining}
+          promptName={game.promptName}
+          promptCount={game.promptCount}
           onBuzz={game.buzz}
           onSubmitAnswer={game.submitAnswer}
         />

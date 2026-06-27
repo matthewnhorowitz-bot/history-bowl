@@ -15,6 +15,7 @@ export const S_GAME_STARTED = "game-started";
 export const S_WORD_REVEALED = "word-revealed";
 export const S_BUZZ_WINDOW = "buzz-window";
 export const S_BUZZ_ACCEPTED = "buzz-accepted";
+export const S_PROMPT = "prompt";
 export const S_ANSWER_RESULT = "answer-result";
 export const S_READING_RESUMED = "reading-resumed";
 export const S_QUESTION_END = "question-end";

@@ -10,6 +10,7 @@ export interface Room {
   powerMarkIndex: number;
   buzzedBy: string | null;
   buzzedAtWord: number;
+  prompted: boolean;
   lockedOut: Set<string>;
   readingTimer: ReturnType<typeof setInterval> | null;
   answerTimer: ReturnType<typeof setTimeout> | null;
@@ -38,6 +39,7 @@ export function createRoom(code: string, hostSocketId: string, hostName: string)
     powerMarkIndex: 0,
     buzzedBy: null,
     buzzedAtWord: 0,
+    prompted: false,
     lockedOut: new Set(),
     readingTimer: null,
     answerTimer: null,

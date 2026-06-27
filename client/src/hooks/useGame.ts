@@ -5,7 +5,7 @@ import {
   WordRevealedPayload, BuzzAcceptedPayload, AnswerResultPayload,
   QuestionEndPayload, PlayerJoinedPayload, PlayerLeftPayload,
   RoomJoinedPayload, GameStartedPayload, HostChangedPayload,
-  ReadingResumedPayload, BuzzWindowPayload, ErrorPayload,
+  ReadingResumedPayload, BuzzWindowPayload, PromptPayload, ErrorPayload,
 } from "@shared/types";
 import * as E from "@shared/events";
 
@@ -17,6 +17,8 @@ export interface GameHook {
   buzzStatus: { buzzedBy: { id: string; name: string }; timerSeconds: number } | null;
   answerTimerRemaining: number;
   buzzWindowRemaining: number;
+  promptName: string | null;
+  promptCount: number;
   lastResult: AnswerResultPayload | null;
   questionEnd: QuestionEndPayload | null;
   isHost: boolean;
@@ -42,6 +44,8 @@ export function useGame(roomCode: string, myId: string, isHostInit: boolean, ini
   const [buzzStatus, setBuzzStatus] = useState<GameHook["buzzStatus"]>(null);
   const [answerTimerRemaining, setAnswerTimerRemaining] = useState(0);
   const [buzzWindowRemaining, setBuzzWindowRemaining] = useState(0);
+  const [promptName, setPromptName] = useState<string | null>(null);
+  const [promptCount, setPromptCount] = useState(0);
   const [lastResult, setLastResult] = useState<AnswerResultPayload | null>(null);
   const [questionEnd, setQuestionEnd] = useState<QuestionEndPayload | null>(null);
   const [isHost, setIsHost] = useState(isHostInit);
@@ -76,6 +80,8 @@ export function useGame(roomCode: string, myId: string, isHostInit: boolean, ini
       setQuestionEnd(null);
       setLockedOut(false);
       clearWindow();
+      setPromptName(null);
+      setPromptCount(0);
       setGameState("READING");
     }
 
@@ -98,14 +104,9 @@ export function useGame(roomCode: string, myId: string, isHostInit: boolean, ini
       if (isPowerMark) setIsPastPowerMark(true);
     }
 
-    function onBuzzAccepted({ buzzedBy, timerSeconds }: BuzzAcceptedPayload) {
-      clearWindow();
-      setBuzzStatus({ buzzedBy, timerSeconds });
-      setGameState("ANSWER_PHASE");
-
-      // Local countdown
+    function startAnswerCountdown(seconds: number) {
       if (timerRef.current) clearInterval(timerRef.current);
-      setAnswerTimerRemaining(timerSeconds);
+      setAnswerTimerRemaining(seconds);
       timerRef.current = setInterval(() => {
         setAnswerTimerRemaining((t) => {
           if (t <= 1) { clearInterval(timerRef.current!); return 0; }
@@ -114,8 +115,27 @@ export function useGame(roomCode: string, myId: string, isHostInit: boolean, ini
       }, 1000);
     }
 
+    function onBuzzAccepted({ buzzedBy, timerSeconds }: BuzzAcceptedPayload) {
+      clearWindow();
+      setPromptName(null);
+      setPromptCount(0);
+      setBuzzStatus({ buzzedBy, timerSeconds });
+      setGameState("ANSWER_PHASE");
+      startAnswerCountdown(timerSeconds);
+    }
+
+    // Close answer / "prompt on X" — same player gets another try.
+    function onPrompt({ buzzedBy, timerSeconds }: PromptPayload) {
+      setPromptName(buzzedBy.name);
+      setPromptCount((c) => c + 1);
+      setBuzzStatus({ buzzedBy, timerSeconds });
+      setGameState("ANSWER_PHASE");
+      startAnswerCountdown(timerSeconds);
+    }
+
     function onAnswerResult(result: AnswerResultPayload) {
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      setPromptName(null);
       setLastResult(result);
       if (!result.correct && result.buzzedBy.id === myId) setLockedOut(true);
       if (!result.resumeReading) setBuzzStatus(null);
@@ -123,6 +143,7 @@ export function useGame(roomCode: string, myId: string, isHostInit: boolean, ini
 
     function onReadingResumed(_: ReadingResumedPayload) {
       clearWindow();
+      setPromptName(null);
       setBuzzStatus(null);
       setGameState("READING");
     }
@@ -130,6 +151,7 @@ export function useGame(roomCode: string, myId: string, isHostInit: boolean, ini
     function onQuestionEnd(payload: QuestionEndPayload) {
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
       clearWindow();
+      setPromptName(null);
       setBuzzStatus(null);
       setLastResult(null);
       setQuestionEnd(payload);
@@ -148,6 +170,7 @@ export function useGame(roomCode: string, myId: string, isHostInit: boolean, ini
     socket.on(E.S_WORD_REVEALED, onWordRevealed);
     socket.on(E.S_BUZZ_WINDOW, onBuzzWindow);
     socket.on(E.S_BUZZ_ACCEPTED, onBuzzAccepted);
+    socket.on(E.S_PROMPT, onPrompt);
     socket.on(E.S_ANSWER_RESULT, onAnswerResult);
     socket.on(E.S_READING_RESUMED, onReadingResumed);
     socket.on(E.S_QUESTION_END, onQuestionEnd);
@@ -161,6 +184,7 @@ export function useGame(roomCode: string, myId: string, isHostInit: boolean, ini
       socket.off(E.S_WORD_REVEALED, onWordRevealed);
       socket.off(E.S_BUZZ_WINDOW, onBuzzWindow);
       socket.off(E.S_BUZZ_ACCEPTED, onBuzzAccepted);
+      socket.off(E.S_PROMPT, onPrompt);
       socket.off(E.S_ANSWER_RESULT, onAnswerResult);
       socket.off(E.S_READING_RESUMED, onReadingResumed);
       socket.off(E.S_QUESTION_END, onQuestionEnd);
@@ -190,7 +214,7 @@ export function useGame(roomCode: string, myId: string, isHostInit: boolean, ini
 
   return {
     gameState, players, revealedWords, isPastPowerMark,
-    buzzStatus, answerTimerRemaining, buzzWindowRemaining, lastResult, questionEnd,
+    buzzStatus, answerTimerRemaining, buzzWindowRemaining, promptName, promptCount, lastResult, questionEnd,
     isHost, myId, roomCode, questionNumber, lockedOut, error,
     buzz, submitAnswer, startGame, nextQuestion, clearError,
   };

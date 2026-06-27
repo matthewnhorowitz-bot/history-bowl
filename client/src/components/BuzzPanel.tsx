@@ -8,29 +8,33 @@ interface Props {
   lockedOut: boolean;
   answerTimerRemaining: number;
   buzzWindowRemaining: number;
+  promptName: string | null;
+  promptCount: number;
   onBuzz: () => void;
   onSubmitAnswer: (answer: string) => void;
 }
 
-export default function BuzzPanel({ gameState, buzzStatus, myId, lockedOut, answerTimerRemaining, buzzWindowRemaining, onBuzz, onSubmitAnswer }: Props) {
+export default function BuzzPanel({ gameState, buzzStatus, myId, lockedOut, answerTimerRemaining, buzzWindowRemaining, promptName, promptCount, onBuzz, onSubmitAnswer }: Props) {
   const iAmBuzzed = buzzStatus?.buzzedBy.id === myId;
+  const prompting = promptName !== null;
 
   if (gameState === "BETWEEN" || gameState === "LOBBY") return null;
 
   if (gameState === "ANSWER_PHASE") {
     if (iAmBuzzed) {
       return (
-        <div className="card" style={{ borderColor: "var(--accent)", marginTop: 16 }}>
-          <p style={{ color: "var(--accent)", fontWeight: 700, marginBottom: 12, fontSize: "0.9rem" }}>
-            Your turn to answer!
+        <div className="card" style={{ borderColor: prompting ? "#e09a30" : "var(--accent)", marginTop: 16 }}>
+          <p style={{ color: prompting ? "#e09a30" : "var(--accent)", fontWeight: 700, marginBottom: 12, fontSize: "0.9rem" }}>
+            {prompting ? "Prompt — be more specific!" : "Your turn to answer!"}
           </p>
-          <AnswerInput onSubmit={onSubmitAnswer} timerRemaining={answerTimerRemaining} />
+          {/* key={promptCount} remounts the input on each prompt: clears it + refocuses */}
+          <AnswerInput key={promptCount} onSubmit={onSubmitAnswer} timerRemaining={answerTimerRemaining} />
         </div>
       );
     }
     return (
       <div className="card" style={{ marginTop: 16, textAlign: "center", color: "var(--text-dim)" }}>
-        <span style={{ fontWeight: 600 }}>{buzzStatus?.buzzedBy.name}</span> is answering…
+        <span style={{ fontWeight: 600 }}>{buzzStatus?.buzzedBy.name}</span> is {prompting ? "being prompted" : "answering"}…
       </div>
     );
   }
