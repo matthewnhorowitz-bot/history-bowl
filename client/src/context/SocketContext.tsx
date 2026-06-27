@@ -1,21 +1,22 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import React, { createContext, useContext, useEffect, useState } from "react";
 import { io, Socket } from "socket.io-client";
 
 const SocketContext = createContext<Socket | null>(null);
 
 export function SocketProvider({ children }: { children: React.ReactNode }) {
-  const socketRef = useRef<Socket | null>(null);
-  const [, forceUpdate] = useState(0);
+  const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
-    const socket = io({ transports: ["websocket"] });
-    socketRef.current = socket;
-    forceUpdate((n) => n + 1);
-    return () => { socket.disconnect(); };
+    const s = io({ transports: ["websocket"] });
+    setSocket(s);
+    return () => { s.disconnect(); };
   }, []);
 
+  // Don't render the app (which calls useSocket) until the socket exists.
+  if (!socket) return null;
+
   return (
-    <SocketContext.Provider value={socketRef.current}>
+    <SocketContext.Provider value={socket}>
       {children}
     </SocketContext.Provider>
   );
