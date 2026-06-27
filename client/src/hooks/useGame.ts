@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useSocket } from "../context/SocketContext";
 import {
-  Player, GameState, GameSnapshot,
+  Player, GameState, GameSnapshot, SyncPayload,
   WordRevealedPayload, BuzzAcceptedPayload, AnswerResultPayload,
   QuestionEndPayload, PlayerJoinedPayload, PlayerLeftPayload,
   RoomJoinedPayload, GameStartedPayload, HostChangedPayload,
@@ -165,6 +165,17 @@ export function useGame(roomCode: string, myId: string, isHostInit: boolean, ini
       setGameState("BETWEEN");
     }
 
+    // Authoritative catch-up from the server when we (re)enter the game.
+    function onSync(s: SyncPayload) {
+      setPlayers(s.players);
+      setQuestionNumber(s.questionNumber);
+      setRevealedWords((prev) => (s.revealedWords.length >= prev.length ? s.revealedWords : prev));
+      setIsPastPowerMark(s.isPastPowerMark);
+      // Adopt the server's authoritative phase on mount, but never yank a player
+      // out of actively answering.
+      setGameState((prev) => (prev === "ANSWER_PHASE" || prev === "BUZZED" ? prev : s.gameState));
+    }
+
     function onError({ message }: ErrorPayload) {
       setError(message);
       setTimeout(() => setError(null), 3500);
@@ -181,7 +192,12 @@ export function useGame(roomCode: string, myId: string, isHostInit: boolean, ini
     socket.on(E.S_ANSWER_RESULT, onAnswerResult);
     socket.on(E.S_READING_RESUMED, onReadingResumed);
     socket.on(E.S_QUESTION_END, onQuestionEnd);
+    socket.on(E.S_SYNC, onSync);
     socket.on(E.S_ERROR, onError);
+
+    // Pull authoritative state immediately on mount (covers the lobby→game
+    // navigation race, reloads, and late joins).
+    if (roomCode) socket.emit(E.C_SYNC, { roomCode });
 
     return () => {
       socket.off(E.S_PLAYER_JOINED, onPlayerJoined);
@@ -195,11 +211,12 @@ export function useGame(roomCode: string, myId: string, isHostInit: boolean, ini
       socket.off(E.S_ANSWER_RESULT, onAnswerResult);
       socket.off(E.S_READING_RESUMED, onReadingResumed);
       socket.off(E.S_QUESTION_END, onQuestionEnd);
+      socket.off(E.S_SYNC, onSync);
       socket.off(E.S_ERROR, onError);
       if (timerRef.current) clearInterval(timerRef.current);
       if (windowRef.current) clearInterval(windowRef.current);
     };
-  }, [socket, myId]);
+  }, [socket, myId, roomCode]);
 
   const buzz = useCallback(() => {
     socket.emit(E.C_BUZZ, { roomCode, wordIndex: revealedWords.length, timestamp: Date.now() });

@@ -6,6 +6,7 @@ export const C_BUZZ = "buzz";
 export const C_SUBMIT_ANSWER = "submit-answer";
 export const C_NEXT_QUESTION = "next-question";
 export const C_LEAVE_ROOM = "leave-room";
+export const C_SYNC = "sync";
 
 // Server → Client
 export const S_ROOM_JOINED = "room-joined";
@@ -21,3 +22,4 @@ export const S_READING_RESUMED = "reading-resumed";
 export const S_QUESTION_END = "question-end";
 export const S_ERROR = "error";
 export const S_HOST_CHANGED = "host-changed";
+export const S_SYNC = "sync-state";

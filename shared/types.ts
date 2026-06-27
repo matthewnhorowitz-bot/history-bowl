@@ -63,6 +63,16 @@ export interface GameSnapshot {
   isPastPowerMark: boolean;
 }
 
+// Full authoritative state, sent in reply to a client's sync request on mount.
+export interface SyncPayload {
+  gameState: GameState;
+  questionNumber: number;
+  revealedWords: string[];
+  isPastPowerMark: boolean;
+  players: Player[];
+  buzzedBy: { id: string; name: string } | null;
+}
+
 export interface RoomJoinedPayload {
   roomCode: string;
   players: Player[];
