@@ -1,5 +1,5 @@
 import { Server, Socket } from "socket.io";
-import { rooms, getPlayers } from "../rooms";
+import { rooms, getPlayers, getTeams } from "../rooms";
 import { startNextQuestion } from "../game/GameController";
 import {
   startCategoryRound, chooseCategories, submitCategoryAnswer, currentCategoryQuestion,
@@ -74,6 +74,9 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
         ? room.trio.categories.map((c) => c.title)
         : null,
       categoryQuestion: currentCategoryQuestion(room),
+      teams: getTeams(room),
+      teamPlay: room.teamPlay,
+      myTeamId: room.players.get(socket.id)?.teamId ?? null,
     });
   });
 

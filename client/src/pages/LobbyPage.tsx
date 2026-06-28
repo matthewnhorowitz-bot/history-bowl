@@ -1,19 +1,23 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useSocket } from "../context/SocketContext";
-import { Player, RoomMode, PlayerJoinedPayload, PlayerLeftPayload, GameStartedPayload, HostChangedPayload, ModeChangedPayload, CategoryChoicesPayload } from "@shared/types";
+import { Player, RoomMode, Team, PlayerJoinedPayload, PlayerLeftPayload, GameStartedPayload, HostChangedPayload, ModeChangedPayload, CategoryChoicesPayload, TeamsUpdatedPayload } from "@shared/types";
 import * as E from "@shared/events";
 
 export default function LobbyPage() {
   const { roomCode } = useParams<{ roomCode: string }>();
-  const { state } = useLocation() as { state: { myId: string; isHost: boolean; players: Player[]; mode?: RoomMode } };
+  const { state } = useLocation() as { state: { myId: string; isHost: boolean; players: Player[]; mode?: RoomMode; teams?: Team[] } };
   const socket = useSocket();
   const navigate = useNavigate();
 
   const [players, setPlayers] = useState<Player[]>(state?.players ?? []);
   const [isHost, setIsHost] = useState(state?.isHost ?? false);
   const [mode, setMode] = useState<RoomMode>(state?.mode ?? "TOSSUP");
+  const [teams, setTeams] = useState<Team[]>(state?.teams ?? []);
+  const [newTeamName, setNewTeamName] = useState("");
   const myId = state?.myId ?? socket.id;
+  const myTeamId = teams.find((t) => t.memberIds.includes(myId))?.id ?? null;
+  const nameOf = (id: string) => players.find((p) => p.id === id)?.name ?? "…";
 
   useEffect(() => {
     if (!roomCode || !state) {
@@ -38,6 +42,7 @@ export default function LobbyPage() {
     }
 
     function onModeChanged({ mode: m }: ModeChangedPayload) { setMode(m); }
+    function onTeamsUpdated({ teams: t }: TeamsUpdatedPayload) { setTeams(t); }
 
     function onCategoryChoices(_: CategoryChoicesPayload) {
       // Category round started — drop into the game (sync-on-mount hydrates it).
@@ -55,6 +60,7 @@ export default function LobbyPage() {
     socket.on(E.S_GAME_STARTED, onGameStarted);
     socket.on(E.S_MODE_CHANGED, onModeChanged);
     socket.on(E.S_CATEGORY_CHOICES, onCategoryChoices);
+    socket.on(E.S_TEAMS_UPDATED, onTeamsUpdated);
 
     return () => {
       socket.off(E.S_PLAYER_JOINED, onPlayerJoined);
@@ -63,6 +69,7 @@ export default function LobbyPage() {
       socket.off(E.S_GAME_STARTED, onGameStarted);
       socket.off(E.S_MODE_CHANGED, onModeChanged);
       socket.off(E.S_CATEGORY_CHOICES, onCategoryChoices);
+      socket.off(E.S_TEAMS_UPDATED, onTeamsUpdated);
     };
   }, [socket, roomCode, myId, isHost, navigate, state, players]);
 
@@ -72,6 +79,18 @@ export default function LobbyPage() {
 
   function changeMode(m: RoomMode) {
     socket.emit(E.C_SET_MODE, { roomCode, mode: m });
+  }
+
+  function createTeam() {
+    const name = newTeamName.trim();
+    socket.emit(E.C_CREATE_TEAM, { roomCode, name });
+    setNewTeamName("");
+  }
+  function joinTeam(teamId: string) {
+    socket.emit(E.C_JOIN_TEAM, { roomCode, teamId });
+  }
+  function leaveTeam() {
+    socket.emit(E.C_LEAVE_TEAM, { roomCode });
   }
 
   function leaveRoom() {
@@ -122,10 +141,68 @@ export default function LobbyPage() {
           <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", marginTop: 10 }}>
             {mode === "TOSSUP"
               ? "Buzz in as each question is read."
-              : "Host picks 2 of 3 categories; everyone answers 8 questions each (7s, +10 each)."}
+              : "Host picks 2 of 3 categories; answer 16 questions (10s, +10 each). Make teams below to play as teams."}
             {!isHost && " Only the host can change the mode."}
           </p>
         </div>
+
+        {/* Teams (category round only) */}
+        {mode === "CATEGORY" && (
+          <div className="card" style={{ marginBottom: 20 }}>
+            <h2 style={{ fontSize: "0.85rem", color: "var(--text-dim)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              Teams
+            </h2>
+            <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", marginBottom: 14 }}>
+              Optional — make or join a team to play as a team (first teammate to answer locks it in). No teams = everyone plays solo.
+            </p>
+
+            {teams.length > 0 && (
+              <ul style={{ listStyle: "none", display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
+                {teams.map((t) => {
+                  const mine = t.id === myTeamId;
+                  return (
+                    <li key={t.id} style={{
+                      border: `1px solid ${mine ? "var(--accent)" : "var(--border)"}`,
+                      borderRadius: "var(--radius)", padding: "10px 12px",
+                      background: mine ? "var(--accent-dim)" : "var(--bg)",
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontWeight: 700, color: mine ? "var(--accent)" : "var(--text)" }}>{t.name}</span>
+                        <span style={{ color: "var(--text-muted)", fontSize: "0.75rem" }}>({t.memberIds.length})</span>
+                        {mine ? (
+                          <button className="btn-secondary" onClick={leaveTeam} style={{ marginLeft: "auto", padding: "4px 12px", fontSize: "0.8rem" }}>
+                            Leave
+                          </button>
+                        ) : (
+                          <button className="btn-secondary" onClick={() => joinTeam(t.id)} style={{ marginLeft: "auto", padding: "4px 12px", fontSize: "0.8rem" }}>
+                            Join
+                          </button>
+                        )}
+                      </div>
+                      <div style={{ color: "var(--text-dim)", fontSize: "0.78rem", marginTop: 4 }}>
+                        {t.memberIds.map(nameOf).join(", ")}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <input
+                value={newTeamName}
+                onChange={(e) => setNewTeamName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && createTeam()}
+                placeholder="New team name"
+                maxLength={24}
+                style={{ flex: "1 1 140px", minWidth: 0 }}
+              />
+              <button className="btn-primary" onClick={createTeam} style={{ padding: "10px 18px", whiteSpace: "nowrap" }}>
+                Create Team
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="card" style={{ marginBottom: 20 }}>
           <h2 style={{ fontSize: "0.85rem", color: "var(--text-dim)", marginBottom: 16, textTransform: "uppercase", letterSpacing: "0.08em" }}>

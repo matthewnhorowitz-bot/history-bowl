@@ -1,5 +1,5 @@
 import { Server } from "socket.io";
-import { Room } from "../rooms";
+import { Room, getTeams } from "../rooms";
 import { judgeAnswer } from "../utils/answerValidator";
 import { getRandomTrio } from "../questions/categoryCache";
 import { CATEGORY_TIMER_S, CATEGORY_SCORE, CATEGORY_REVEAL_MS } from "../../../shared/constants";
@@ -14,7 +14,10 @@ function getScores(room: Room): Record<string, number> {
 // Host started a Category Round → pick a trio and let the host choose 2 of 3.
 export function startCategoryRound(io: Server, room: Room): void {
   clearCategoryTimers(room);
+  // Team play if any teams were formed in the lobby; otherwise individual.
+  room.teamPlay = room.teams.size > 0;
   for (const p of room.players.values()) p.score = 0;
+  for (const t of room.teams.values()) t.score = 0;
 
   room.trio = getRandomTrio();
   room.catQuestions = [];
@@ -73,6 +76,7 @@ function askCategoryQuestion(io: Server, room: Room): void {
     questionIndex: room.catIndex,
     total: room.catQuestions.length,
     timerSeconds: CATEGORY_TIMER_S,
+    teamPlay: room.teamPlay,
   });
 
   room.catTimer = setTimeout(() => endCategoryQuestion(io, room), CATEGORY_TIMER_S * 1000);
@@ -80,21 +84,35 @@ function askCategoryQuestion(io: Server, room: Room): void {
 
 export function submitCategoryAnswer(io: Server, room: Room, socketId: string, answer: string): void {
   if (room.state !== "CATEGORY_PLAYING" || !room.catOpen) return;
-  if (!room.players.has(socketId)) return;
-  if (room.catAnswered.has(socketId)) return;
-
-  room.catAnswered.add(socketId);
+  const player = room.players.get(socketId);
+  if (!player) return;
   const cur = room.catQuestions[room.catIndex];
-  if (judgeAnswer(answer, cur.qa.answer) === "correct") {
-    const p = room.players.get(socketId)!;
-    p.score += CATEGORY_SCORE;
+  const correct = judgeAnswer(answer, cur.qa.answer) === "correct";
+
+  if (room.teamPlay) {
+    // One answer per team: the first teammate to submit locks it in.
+    const teamId = player.teamId;
+    if (!teamId) return; // spectator (not on a team)
+    if (room.catAnswered.has(teamId)) return; // team already answered
+    room.catAnswered.add(teamId);
+    if (correct) {
+      const team = room.teams.get(teamId);
+      if (team) team.score += CATEGORY_SCORE;
+      room.catCorrect.add(teamId);
+    }
+    // Every team has answered — reveal immediately.
+    if (room.catAnswered.size >= room.teams.size) endCategoryQuestion(io, room);
+    return;
+  }
+
+  // Individual play.
+  if (room.catAnswered.has(socketId)) return;
+  room.catAnswered.add(socketId);
+  if (correct) {
+    player.score += CATEGORY_SCORE;
     room.catCorrect.add(socketId);
   }
-
-  // Everyone has answered — reveal immediately.
-  if (room.catAnswered.size >= room.players.size) {
-    endCategoryQuestion(io, room);
-  }
+  if (room.catAnswered.size >= room.players.size) endCategoryQuestion(io, room);
 }
 
 function endCategoryQuestion(io: Server, room: Room): void {
@@ -109,8 +127,9 @@ function endCategoryQuestion(io: Server, room: Room): void {
   io.to(room.code).emit(E.S_CATEGORY_REVEAL, {
     questionIndex: room.catIndex,
     answer: cur.qa.answer,
-    correctIds: Array.from(room.catCorrect),
+    correctIds: Array.from(room.catCorrect), // team ids when teamPlay, else player ids
     scores: getScores(room),
+    teams: room.teamPlay ? getTeams(room) : null,
   });
 
   room.catTimer = setTimeout(() => {
@@ -122,7 +141,10 @@ function endCategoryQuestion(io: Server, room: Room): void {
 function endCategoryRound(io: Server, room: Room): void {
   clearCategoryTimers(room);
   room.state = "BETWEEN";
-  io.to(room.code).emit(E.S_CATEGORY_END, { scores: getScores(room) });
+  io.to(room.code).emit(E.S_CATEGORY_END, {
+    scores: getScores(room),
+    teams: room.teamPlay ? getTeams(room) : null,
+  });
 }
 
 export function clearCategoryTimers(room: Room): void {
@@ -145,5 +167,6 @@ export function currentCategoryQuestion(room: Room) {
     questionIndex: room.catIndex,
     total: room.catQuestions.length,
     timerSeconds: CATEGORY_TIMER_S,
+    teamPlay: room.teamPlay,
   };
 }

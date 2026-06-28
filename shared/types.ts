@@ -26,6 +26,15 @@ export interface Player {
   name: string;
   score: number;
   isHost: boolean;
+  teamId?: string | null;
+}
+
+// A team in the category round (team play). Score is the team's running total.
+export interface Team {
+  id: string;
+  name: string;
+  score: number;
+  memberIds: string[];
 }
 
 export interface Question {
@@ -95,6 +104,9 @@ export interface SyncPayload {
   mode: RoomMode;
   categoryChoices: string[] | null;          // 3 titles when CATEGORY_SELECT
   categoryQuestion: CategoryQuestionPayload | null; // when CATEGORY_PLAYING
+  teams: Team[];
+  teamPlay: boolean;
+  myTeamId: string | null;
 }
 
 // ---- Category (Third Quarter) payloads ----
@@ -113,15 +125,22 @@ export interface CategoryQuestionPayload {
   questionIndex: number; // 0..15
   total: number;        // 16
   timerSeconds: number;
+  teamPlay: boolean;
 }
 export interface CategoryRevealPayload {
   questionIndex: number;
   answer: string;
-  correctIds: string[];
+  correctIds: string[]; // player ids, or team ids when teamPlay
   scores: Record<string, number>;
+  teams: Team[] | null; // team standings when teamPlay, else null
 }
 export interface CategoryEndPayload {
   scores: Record<string, number>;
+  teams: Team[] | null;
+}
+
+export interface TeamsUpdatedPayload {
+  teams: Team[];
 }
 
 export interface RoomJoinedPayload {
@@ -132,6 +151,7 @@ export interface RoomJoinedPayload {
   inProgress?: boolean;
   snapshot?: GameSnapshot;
   mode?: RoomMode;
+  teams?: Team[];
 }
 
 export interface PlayerJoinedPayload {

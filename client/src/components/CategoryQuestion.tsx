@@ -8,12 +8,16 @@ interface Props {
   timerRemaining: number;
   answered: boolean;
   myId: string;
+  teamPlay: boolean;
+  myTeamId: string | null;
   onSubmit: (answer: string) => void;
 }
 
-export default function CategoryQuestion({ q, reveal, timerRemaining, answered, myId, onSubmit }: Props) {
+export default function CategoryQuestion({ q, reveal, timerRemaining, answered, myId, teamPlay, myTeamId, onSubmit }: Props) {
   const showingReveal = reveal !== null && reveal.questionIndex === q.questionIndex;
-  const iGotIt = showingReveal && reveal!.correctIds.includes(myId);
+  const myWinId = teamPlay ? myTeamId : myId;
+  const iGotIt = showingReveal && myWinId !== null && reveal!.correctIds.includes(myWinId);
+  const spectator = teamPlay && !myTeamId;
 
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", paddingTop: 16 }}>
@@ -41,9 +45,13 @@ export default function CategoryQuestion({ q, reveal, timerRemaining, answered, 
           {" — "}
           <span style={{ color: "var(--text)" }}>{reveal!.answer}</span>
         </div>
+      ) : spectator ? (
+        <p style={{ textAlign: "center", color: "var(--text-dim)", padding: 14 }}>
+          You're spectating — join a team in the lobby to play next round.
+        </p>
       ) : answered ? (
         <p style={{ textAlign: "center", color: "var(--text-dim)", padding: 14 }}>
-          Answer locked in — waiting for the timer…
+          {teamPlay ? "Your team's answer is locked in — waiting for the timer…" : "Answer locked in — waiting for the timer…"}
         </p>
       ) : (
         <AnswerInput key={q.questionIndex} onSubmit={onSubmit} timerRemaining={timerRemaining} maxSeconds={CATEGORY_TIMER_S} />

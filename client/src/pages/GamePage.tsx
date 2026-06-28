@@ -6,6 +6,7 @@ import { useKeyboard } from "../hooks/useKeyboard";
 import QuestionDisplay from "../components/QuestionDisplay";
 import BuzzPanel from "../components/BuzzPanel";
 import Scoreboard from "../components/Scoreboard";
+import TeamScoreboard from "../components/TeamScoreboard";
 import QuestionEndOverlay from "../components/QuestionEndOverlay";
 import CategorySelect from "../components/CategorySelect";
 import CategoryQuestion from "../components/CategoryQuestion";
@@ -43,8 +44,8 @@ export default function GamePage() {
 
   if (isCategory) {
     return (
-      <div style={{ minHeight: "100vh", display: "flex", gap: 24, padding: 24, maxWidth: 1100, margin: "0 auto" }}>
-        <div style={{ flex: 1 }}>
+      <div className="game-layout" style={{ minHeight: "100vh", padding: 24, maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
             <h1 style={{ fontSize: "1.1rem", color: "var(--accent)", fontWeight: 700 }}>History Bowl · Third Quarter</h1>
             <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.8rem", color: "var(--text-dim)" }}>
@@ -63,6 +64,8 @@ export default function GamePage() {
               timerRemaining={game.categoryTimerRemaining}
               answered={game.categoryAnswered}
               myId={game.myId}
+              teamPlay={game.teamPlay}
+              myTeamId={game.myTeamId}
               onSubmit={game.submitCategoryAnswer}
             />
           )}
@@ -82,17 +85,19 @@ export default function GamePage() {
           {game.error && <div className="error-toast">{game.error}</div>}
         </div>
 
-        <div style={{ width: 220, flexShrink: 0 }}>
-          <Scoreboard players={game.players} myId={game.myId} lastDelta={null} />
+        <div className="game-sidebar">
+          {game.teamPlay
+            ? <TeamScoreboard teams={game.teams} myTeamId={game.myTeamId} />
+            : <Scoreboard players={game.players} myId={game.myId} lastDelta={null} />}
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", gap: 24, padding: 24, maxWidth: 1100, margin: "0 auto" }}>
+    <div className="game-layout" style={{ minHeight: "100vh", padding: 24, maxWidth: 1100, margin: "0 auto" }}>
       {/* Main column */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+      <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <h1 style={{ fontSize: "1.1rem", color: "var(--accent)", fontWeight: 700 }}>History Bowl</h1>
@@ -156,7 +161,7 @@ export default function GamePage() {
       </div>
 
       {/* Sidebar */}
-      <div style={{ width: 220, flexShrink: 0, display: "flex", flexDirection: "column", gap: 16 }}>
+      <div className="game-sidebar" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <Scoreboard players={game.players} myId={game.myId} lastDelta={lastDelta} />
       </div>
 

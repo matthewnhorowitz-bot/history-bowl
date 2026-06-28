@@ -101,3 +101,13 @@ a { color: var(--accent); text-decoration: none; }
 
 .word { display: inline; }
 .word-power { color: var(--power); }
+
+/* Responsive game layout: stack the scoreboard below the main column on phones */
+.game-layout { display: flex; gap: 24px; }
+.game-sidebar { width: 220px; flex-shrink: 0; }
+
+@media (max-width: 720px) {
+  .game-layout { flex-direction: column; padding: 12px !important; gap: 16px; }
+  .game-sidebar { width: 100%; }
+  .card { padding: 16px; }
+}

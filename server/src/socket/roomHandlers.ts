@@ -1,5 +1,5 @@
 import { Server, Socket } from "socket.io";
-import { rooms, createRoom, generateRoomCode, getPlayers } from "../rooms";
+import { rooms, createRoom, generateRoomCode, getPlayers, getTeams, removeFromTeam } from "../rooms";
 import * as E from "../../../shared/events";
 import { CreateRoomPayload, JoinRoomPayload } from "../../../shared/types";
 
@@ -68,6 +68,7 @@ export function registerRoomHandlers(io: Server, socket: Socket): void {
       inProgress,
       snapshot,
       mode: room.mode,
+      teams: getTeams(room),
     });
 
     socket.to(code).emit(E.S_PLAYER_JOINED, { players: getPlayers(room) });
@@ -89,6 +90,7 @@ export function handlePlayerLeave(io: Server, socket: Socket, roomCode: string):
   const room = rooms.get(roomCode);
   if (!room || !room.players.has(socket.id)) return;
 
+  const wasOnTeam = removeFromTeam(room, socket.id);
   room.players.delete(socket.id);
   socket.leave(roomCode);
 
@@ -115,4 +117,5 @@ export function handlePlayerLeave(io: Server, socket: Socket, roomCode: string):
   }
 
   io.to(roomCode).emit(E.S_PLAYER_LEFT, { players: getPlayers(room) });
+  if (wasOnTeam) io.to(roomCode).emit(E.S_TEAMS_UPDATED, { teams: getTeams(room) });
 }

@@ -7,7 +7,7 @@ import {
   RoomJoinedPayload, GameStartedPayload, HostChangedPayload,
   ReadingResumedPayload, BuzzWindowPayload, PromptPayload, ErrorPayload,
   ModeChangedPayload, CategoryChoicesPayload, CategoryQuestionPayload,
-  CategoryRevealPayload, CategoryEndPayload,
+  CategoryRevealPayload, CategoryEndPayload, Team, TeamsUpdatedPayload,
 } from "@shared/types";
 import * as E from "@shared/events";
 
@@ -37,6 +37,10 @@ export interface GameHook {
   categoryTimerRemaining: number;
   categoryAnswered: boolean;
   categoryDone: boolean;
+  // teams (category round)
+  teams: Team[];
+  teamPlay: boolean;
+  myTeamId: string | null;
   buzz: () => void;
   submitAnswer: (answer: string) => void;
   startGame: () => void;
@@ -44,6 +48,9 @@ export interface GameHook {
   setMode: (mode: RoomMode) => void;
   chooseCategories: (indices: number[]) => void;
   submitCategoryAnswer: (answer: string) => void;
+  createTeam: (name: string) => void;
+  joinTeam: (teamId: string) => void;
+  leaveTeam: () => void;
   clearError: () => void;
 }
 
@@ -73,6 +80,9 @@ export function useGame(roomCode: string, myId: string, isHostInit: boolean, ini
   const [categoryTimerRemaining, setCategoryTimerRemaining] = useState(0);
   const [categoryAnswered, setCategoryAnswered] = useState(false);
   const [categoryDone, setCategoryDone] = useState(false);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [teamPlay, setTeamPlay] = useState(false);
+  const [myTeamId, setMyTeamId] = useState<string | null>(null);
   const catTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -197,11 +207,20 @@ export function useGame(roomCode: string, myId: string, isHostInit: boolean, ini
       // out of actively answering.
       setGameState((prev) => (prev === "ANSWER_PHASE" || prev === "BUZZED" ? prev : s.gameState));
       setModeState(s.mode);
+      setTeams(s.teams);
+      setTeamPlay(s.teamPlay);
+      setMyTeamId(s.myTeamId);
       if (s.categoryChoices) setCategoryChoices(s.categoryChoices);
       if (s.categoryQuestion) {
         setCategoryQuestion(s.categoryQuestion);
         setCategoryReveal(null);
       }
+    }
+
+    function onTeamsUpdated({ teams: t }: TeamsUpdatedPayload) {
+      setTeams(t);
+      const mine = t.find((tm) => tm.memberIds.includes(myId));
+      setMyTeamId(mine ? mine.id : null);
     }
 
     // ---- Category (Third Quarter) mode ----
@@ -229,6 +248,7 @@ export function useGame(roomCode: string, myId: string, isHostInit: boolean, ini
     }
     function onCategoryQuestion(p: CategoryQuestionPayload) {
       setModeState("CATEGORY");
+      setTeamPlay(p.teamPlay);
       setCategoryQuestion(p);
       setCategoryReveal(null);
       setCategoryAnswered(false);
@@ -240,10 +260,12 @@ export function useGame(roomCode: string, myId: string, isHostInit: boolean, ini
       setCategoryTimerRemaining(0);
       setCategoryReveal(p);
       applyScores(p.scores);
+      if (p.teams) setTeams(p.teams);
     }
     function onCategoryEnd(p: CategoryEndPayload) {
       clearCatTimer();
       applyScores(p.scores);
+      if (p.teams) setTeams(p.teams);
       setCategoryQuestion(null);
       setCategoryReveal(null);
       setCategoryDone(true);
@@ -272,6 +294,7 @@ export function useGame(roomCode: string, myId: string, isHostInit: boolean, ini
     socket.on(E.S_CATEGORY_QUESTION, onCategoryQuestion);
     socket.on(E.S_CATEGORY_REVEAL, onCategoryReveal);
     socket.on(E.S_CATEGORY_END, onCategoryEnd);
+    socket.on(E.S_TEAMS_UPDATED, onTeamsUpdated);
     socket.on(E.S_ERROR, onError);
 
     // Pull authoritative state immediately on mount (covers the lobby→game
@@ -296,6 +319,7 @@ export function useGame(roomCode: string, myId: string, isHostInit: boolean, ini
       socket.off(E.S_CATEGORY_QUESTION, onCategoryQuestion);
       socket.off(E.S_CATEGORY_REVEAL, onCategoryReveal);
       socket.off(E.S_CATEGORY_END, onCategoryEnd);
+      socket.off(E.S_TEAMS_UPDATED, onTeamsUpdated);
       socket.off(E.S_ERROR, onError);
       if (timerRef.current) clearInterval(timerRef.current);
       if (windowRef.current) clearInterval(windowRef.current);
@@ -334,11 +358,25 @@ export function useGame(roomCode: string, myId: string, isHostInit: boolean, ini
     setCategoryAnswered(true);
   }, [socket, roomCode]);
 
+  const createTeam = useCallback((name: string) => {
+    socket.emit(E.C_CREATE_TEAM, { roomCode, name });
+  }, [socket, roomCode]);
+
+  const joinTeam = useCallback((teamId: string) => {
+    socket.emit(E.C_JOIN_TEAM, { roomCode, teamId });
+  }, [socket, roomCode]);
+
+  const leaveTeam = useCallback(() => {
+    socket.emit(E.C_LEAVE_TEAM, { roomCode });
+  }, [socket, roomCode]);
+
   return {
     gameState, players, revealedWords, isPastPowerMark,
     buzzStatus, answerTimerRemaining, buzzWindowRemaining, promptName, promptCount, lastResult, questionEnd,
     isHost, myId, roomCode, questionNumber, lockedOut, error,
     mode, categoryChoices, categoryQuestion, categoryReveal, categoryTimerRemaining, categoryAnswered, categoryDone,
-    buzz, submitAnswer, startGame, nextQuestion, setMode, chooseCategories, submitCategoryAnswer, clearError,
+    teams, teamPlay, myTeamId,
+    buzz, submitAnswer, startGame, nextQuestion, setMode, chooseCategories, submitCategoryAnswer,
+    createTeam, joinTeam, leaveTeam, clearError,
   };
 }

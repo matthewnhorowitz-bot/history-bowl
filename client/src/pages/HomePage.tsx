@@ -38,7 +38,7 @@ export default function HomePage() {
     setLoading(true);
 
     socket.once(E.S_ROOM_JOINED, (data: RoomJoinedPayload) => {
-      const navState = { myId: data.playerId, isHost: false, players: data.players, snapshot: data.snapshot, mode: data.mode };
+      const navState = { myId: data.playerId, isHost: false, players: data.players, snapshot: data.snapshot, mode: data.mode, teams: data.teams };
       // If the game is already running, drop straight into it instead of the lobby.
       const dest = data.inProgress ? `/game/${data.roomCode}` : `/lobby/${data.roomCode}`;
       navigate(dest, { state: navState });

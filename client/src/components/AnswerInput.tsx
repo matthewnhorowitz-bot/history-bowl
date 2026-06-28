@@ -33,7 +33,7 @@ export default function AnswerInput({ onSubmit, timerRemaining, maxSeconds = 5 }
         }} />
       </div>
 
-      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <span style={{ fontVariantNumeric: "tabular-nums", color: barColor, fontWeight: 700, minWidth: 18, fontSize: "0.95rem" }}>
           {timerRemaining}
         </span>
@@ -43,7 +43,7 @@ export default function AnswerInput({ onSubmit, timerRemaining, maxSeconds = 5 }
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
           placeholder="Type your answer…"
-          style={{ flex: 1 }}
+          style={{ flex: "1 1 160px", minWidth: 0 }}
         />
         <button className="btn-primary" onClick={handleSubmit} style={{ whiteSpace: "nowrap", padding: "10px 18px" }}>
           Submit

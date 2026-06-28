@@ -7,6 +7,7 @@ import fs from "fs";
 import { registerRoomHandlers } from "./socket/roomHandlers";
 import { registerGameHandlers } from "./socket/gameHandlers";
 import { registerBuzzHandlers } from "./socket/buzzHandlers";
+import { registerTeamHandlers } from "./socket/teamHandlers";
 
 const PORT = Number(process.env.PORT) || 3001;
 
@@ -36,6 +37,7 @@ io.on("connection", (socket) => {
   registerRoomHandlers(io, socket);
   registerGameHandlers(io, socket);
   registerBuzzHandlers(io, socket);
+  registerTeamHandlers(io, socket);
 
   socket.on("disconnect", (reason) => {
     console.log(`[socket] disconnected: ${socket.id} (${reason})`);
