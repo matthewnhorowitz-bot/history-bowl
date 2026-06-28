@@ -1,4 +1,4 @@
-export const WORD_INTERVAL_MS = 250;
+export const WORD_INTERVAL_MS = 213;
 export const ANSWER_TIMER_S = 5;
 export const END_BUZZ_WINDOW_S = 7; // grace period to buzz after the question finishes reading
 export const POWER_SCORE = 15;
