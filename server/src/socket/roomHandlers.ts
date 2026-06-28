@@ -19,6 +19,7 @@ export function registerRoomHandlers(io: Server, socket: Socket): void {
       players: getPlayers(room),
       isHost: true,
       playerId: socket.id,
+      mode: room.mode,
     });
   });
 
@@ -66,6 +67,7 @@ export function registerRoomHandlers(io: Server, socket: Socket): void {
       playerId: socket.id,
       inProgress,
       snapshot,
+      mode: room.mode,
     });
 
     socket.to(code).emit(E.S_PLAYER_JOINED, { players: getPlayers(room) });
@@ -97,6 +99,7 @@ export function handlePlayerLeave(io: Server, socket: Socket, roomCode: string):
       if (rooms.get(roomCode)?.players.size === 0) {
         if (room.readingTimer) clearInterval(room.readingTimer);
         if (room.answerTimer) clearTimeout(room.answerTimer);
+        if (room.catTimer) clearTimeout(room.catTimer);
         rooms.delete(roomCode);
       }
     }, 60_000);

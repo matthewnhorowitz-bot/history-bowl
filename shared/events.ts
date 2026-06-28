@@ -7,6 +7,9 @@ export const C_SUBMIT_ANSWER = "submit-answer";
 export const C_NEXT_QUESTION = "next-question";
 export const C_LEAVE_ROOM = "leave-room";
 export const C_SYNC = "sync";
+export const C_SET_MODE = "set-mode";
+export const C_CHOOSE_CATEGORIES = "choose-categories";
+export const C_SUBMIT_CATEGORY_ANSWER = "submit-category-answer";
 
 // Server → Client
 export const S_ROOM_JOINED = "room-joined";
@@ -23,3 +26,8 @@ export const S_QUESTION_END = "question-end";
 export const S_ERROR = "error";
 export const S_HOST_CHANGED = "host-changed";
 export const S_SYNC = "sync-state";
+export const S_MODE_CHANGED = "mode-changed";
+export const S_CATEGORY_CHOICES = "category-choices";
+export const S_CATEGORY_QUESTION = "category-question";
+export const S_CATEGORY_REVEAL = "category-reveal";
+export const S_CATEGORY_END = "category-end";

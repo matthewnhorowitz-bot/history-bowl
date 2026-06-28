@@ -1,10 +1,11 @@
-import { GameState, Player, Question } from "../../shared/types";
+import { GameState, Player, Question, RoomMode, CategoryTrio, CategoryQA } from "../../shared/types";
 
 export interface Room {
   code: string;
   hostSocketId: string;
   players: Map<string, Player>;
   state: GameState;
+  mode: RoomMode;
   currentQuestion: Question | null;
   wordsRevealed: number;
   powerMarkIndex: number;
@@ -18,6 +19,14 @@ export interface Room {
   questionPool: Question[];
   questionNumber: number;
   cleanupTimer: ReturnType<typeof setTimeout> | null;
+  // Category (Third Quarter) mode
+  trio: CategoryTrio | null;
+  catQuestions: { categoryTitle: string; intro: string; catNumber: number; indexInCat: number; qa: CategoryQA }[];
+  catIndex: number;
+  catAnswered: Set<string>;
+  catCorrect: Set<string>;
+  catOpen: boolean; // accepting answers for the current category question
+  catTimer: ReturnType<typeof setTimeout> | null;
 }
 
 export const rooms = new Map<string, Room>();
@@ -34,6 +43,7 @@ export function createRoom(code: string, hostSocketId: string, hostName: string)
     hostSocketId,
     players: new Map([[hostSocketId, host]]),
     state: "LOBBY",
+    mode: "TOSSUP",
     currentQuestion: null,
     wordsRevealed: 0,
     powerMarkIndex: 0,
@@ -47,6 +57,13 @@ export function createRoom(code: string, hostSocketId: string, hostName: string)
     questionPool: [],
     questionNumber: 0,
     cleanupTimer: null,
+    trio: null,
+    catQuestions: [],
+    catIndex: 0,
+    catAnswered: new Set(),
+    catCorrect: new Set(),
+    catOpen: false,
+    catTimer: null,
   };
   rooms.set(code, room);
   return room;

@@ -3,9 +3,10 @@ import { useEffect, useRef, useState } from "react";
 interface Props {
   onSubmit: (answer: string) => void;
   timerRemaining: number;
+  maxSeconds?: number;
 }
 
-export default function AnswerInput({ onSubmit, timerRemaining }: Props) {
+export default function AnswerInput({ onSubmit, timerRemaining, maxSeconds = 5 }: Props) {
   const [value, setValue] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -17,7 +18,7 @@ export default function AnswerInput({ onSubmit, timerRemaining }: Props) {
     onSubmit(value.trim());
   }
 
-  const pct = timerRemaining / 5;
+  const pct = Math.max(0, Math.min(1, timerRemaining / maxSeconds));
   const barColor = timerRemaining <= 1 ? "var(--danger)" : timerRemaining <= 2 ? "#e09a30" : "var(--power)";
 
   return (

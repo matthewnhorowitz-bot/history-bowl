@@ -7,6 +7,8 @@ import QuestionDisplay from "../components/QuestionDisplay";
 import BuzzPanel from "../components/BuzzPanel";
 import Scoreboard from "../components/Scoreboard";
 import QuestionEndOverlay from "../components/QuestionEndOverlay";
+import CategorySelect from "../components/CategorySelect";
+import CategoryQuestion from "../components/CategoryQuestion";
 
 export default function GamePage() {
   const { roomCode } = useParams<{ roomCode: string }>();
@@ -32,6 +34,60 @@ export default function GamePage() {
   const lastDelta = game.lastResult
     ? { playerId: game.lastResult.buzzedBy.id, delta: game.lastResult.delta }
     : null;
+
+  // ---- Category (Third Quarter) mode ----
+  const isCategory =
+    game.mode === "CATEGORY" ||
+    game.gameState === "CATEGORY_SELECT" ||
+    game.gameState === "CATEGORY_PLAYING";
+
+  if (isCategory) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", gap: 24, padding: 24, maxWidth: 1100, margin: "0 auto" }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
+            <h1 style={{ fontSize: "1.1rem", color: "var(--accent)", fontWeight: 700 }}>History Bowl · Third Quarter</h1>
+            <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.8rem", color: "var(--text-dim)" }}>
+              Room: <strong style={{ color: "var(--text)", letterSpacing: "0.15em" }}>{roomCode}</strong>
+            </span>
+          </div>
+
+          {game.gameState === "CATEGORY_SELECT" && game.categoryChoices && (
+            <CategorySelect titles={game.categoryChoices} isHost={game.isHost} onChoose={game.chooseCategories} />
+          )}
+
+          {game.gameState === "CATEGORY_PLAYING" && game.categoryQuestion && (
+            <CategoryQuestion
+              q={game.categoryQuestion}
+              reveal={game.categoryReveal}
+              timerRemaining={game.categoryTimerRemaining}
+              answered={game.categoryAnswered}
+              myId={game.myId}
+              onSubmit={game.submitCategoryAnswer}
+            />
+          )}
+
+          {game.categoryDone && (
+            <div style={{ maxWidth: 560, margin: "0 auto", textAlign: "center", paddingTop: 32 }}>
+              <h2 style={{ color: "var(--accent)", marginBottom: 12 }}>Round complete!</h2>
+              <p style={{ color: "var(--text-dim)", marginBottom: 24 }}>Final scores are on the right.</p>
+              {game.isHost && (
+                <button className="btn-primary" onClick={game.nextQuestion} style={{ padding: "12px 24px" }}>
+                  New Categories →
+                </button>
+              )}
+            </div>
+          )}
+
+          {game.error && <div className="error-toast">{game.error}</div>}
+        </div>
+
+        <div style={{ width: 220, flexShrink: 0 }}>
+          <Scoreboard players={game.players} myId={game.myId} lastDelta={null} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", gap: 24, padding: 24, maxWidth: 1100, margin: "0 auto" }}>

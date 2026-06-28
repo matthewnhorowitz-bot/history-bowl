@@ -1,4 +1,25 @@
-export type GameState = "LOBBY" | "READING" | "BUZZED" | "ANSWER_PHASE" | "BETWEEN";
+export type GameState =
+  | "LOBBY" | "READING" | "BUZZED" | "ANSWER_PHASE" | "BETWEEN"
+  | "CATEGORY_SELECT" | "CATEGORY_PLAYING";
+
+export type RoomMode = "TOSSUP" | "CATEGORY";
+
+// Third Quarter category data (bundled)
+export interface CategoryQA {
+  clue: string;
+  answer: string;
+}
+export interface CategoryDef {
+  title: string;
+  intro: string;
+  questions: CategoryQA[]; // 8
+}
+export interface CategoryTrio {
+  id: string;
+  setName: string;
+  year: number;
+  categories: CategoryDef[]; // 3
+}
 
 export interface Player {
   id: string;
@@ -71,6 +92,36 @@ export interface SyncPayload {
   isPastPowerMark: boolean;
   players: Player[];
   buzzedBy: { id: string; name: string } | null;
+  mode: RoomMode;
+  categoryChoices: string[] | null;          // 3 titles when CATEGORY_SELECT
+  categoryQuestion: CategoryQuestionPayload | null; // when CATEGORY_PLAYING
+}
+
+// ---- Category (Third Quarter) payloads ----
+export interface ModeChangedPayload {
+  mode: RoomMode;
+}
+export interface CategoryChoicesPayload {
+  titles: string[]; // the 3 category titles
+}
+export interface CategoryQuestionPayload {
+  categoryTitle: string;
+  intro: string;
+  clue: string;
+  catNumber: number;    // 1 or 2 (which chosen category)
+  indexInCat: number;   // 1..8
+  questionIndex: number; // 0..15
+  total: number;        // 16
+  timerSeconds: number;
+}
+export interface CategoryRevealPayload {
+  questionIndex: number;
+  answer: string;
+  correctIds: string[];
+  scores: Record<string, number>;
+}
+export interface CategoryEndPayload {
+  scores: Record<string, number>;
 }
 
 export interface RoomJoinedPayload {
@@ -80,6 +131,7 @@ export interface RoomJoinedPayload {
   playerId: string;
   inProgress?: boolean;
   snapshot?: GameSnapshot;
+  mode?: RoomMode;
 }
 
 export interface PlayerJoinedPayload {

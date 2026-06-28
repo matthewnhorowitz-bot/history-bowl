@@ -25,7 +25,7 @@ export default function HomePage() {
     setLoading(true);
 
     socket.once(E.S_ROOM_JOINED, (data: RoomJoinedPayload) => {
-      navigate(`/lobby/${data.roomCode}`, { state: { myId: data.playerId, isHost: true, players: data.players } });
+      navigate(`/lobby/${data.roomCode}`, { state: { myId: data.playerId, isHost: true, players: data.players, mode: data.mode } });
     });
     socket.once(E.S_ERROR, ({ message }: ErrorPayload) => showError(message));
 
@@ -38,7 +38,7 @@ export default function HomePage() {
     setLoading(true);
 
     socket.once(E.S_ROOM_JOINED, (data: RoomJoinedPayload) => {
-      const navState = { myId: data.playerId, isHost: false, players: data.players, snapshot: data.snapshot };
+      const navState = { myId: data.playerId, isHost: false, players: data.players, snapshot: data.snapshot, mode: data.mode };
       // If the game is already running, drop straight into it instead of the lobby.
       const dest = data.inProgress ? `/game/${data.roomCode}` : `/lobby/${data.roomCode}`;
       navigate(dest, { state: navState });

@@ -1,10 +1,23 @@
 import { Server, Socket } from "socket.io";
 import { rooms, getPlayers } from "../rooms";
 import { startNextQuestion } from "../game/GameController";
+import {
+  startCategoryRound, chooseCategories, submitCategoryAnswer, currentCategoryQuestion,
+} from "../game/CategoryController";
 import { getInitialPool } from "../questions/questionCache";
+import { RoomMode } from "../../../shared/types";
 import * as E from "../../../shared/events";
 
 export function registerGameHandlers(io: Server, socket: Socket): void {
+  // Host toggles Tossup vs Category round in the lobby.
+  socket.on(E.C_SET_MODE, ({ roomCode, mode }: { roomCode: string; mode: RoomMode }) => {
+    const room = rooms.get(roomCode);
+    if (!room || room.hostSocketId !== socket.id || room.state !== "LOBBY") return;
+    if (mode !== "TOSSUP" && mode !== "CATEGORY") return;
+    room.mode = mode;
+    io.to(room.code).emit(E.S_MODE_CHANGED, { mode });
+  });
+
   socket.on(E.C_START_GAME, async ({ roomCode }: { roomCode: string }) => {
     const room = rooms.get(roomCode);
     if (!room) return;
@@ -14,6 +27,11 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
     }
     if (room.state !== "LOBBY") return;
 
+    if (room.mode === "CATEGORY") {
+      startCategoryRound(io, room);
+      return;
+    }
+
     try {
       room.questionPool = await getInitialPool();
     } catch {
@@ -22,6 +40,18 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
     }
 
     startNextQuestion(io, room);
+  });
+
+  socket.on(E.C_CHOOSE_CATEGORIES, ({ roomCode, indices }: { roomCode: string; indices: number[] }) => {
+    const room = rooms.get(roomCode);
+    if (!room || room.hostSocketId !== socket.id) return;
+    chooseCategories(io, room, indices);
+  });
+
+  socket.on(E.C_SUBMIT_CATEGORY_ANSWER, ({ roomCode, answer }: { roomCode: string; answer: string }) => {
+    const room = rooms.get(roomCode);
+    if (!room) return;
+    submitCategoryAnswer(io, room, socket.id, answer ?? "");
   });
 
   // A client (e.g. one that just navigated into the game) asks for the
@@ -39,6 +69,11 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
       isPastPowerMark: room.wordsRevealed > room.powerMarkIndex,
       players: getPlayers(room),
       buzzedBy: buzzer ? { id: buzzer.id, name: buzzer.name } : null,
+      mode: room.mode,
+      categoryChoices: room.state === "CATEGORY_SELECT" && room.trio
+        ? room.trio.categories.map((c) => c.title)
+        : null,
+      categoryQuestion: currentCategoryQuestion(room),
     });
   });
 
@@ -48,6 +83,10 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
     if (room.hostSocketId !== socket.id) return;
     if (room.state !== "BETWEEN") return;
 
+    if (room.mode === "CATEGORY") {
+      startCategoryRound(io, room); // new trio of categories
+      return;
+    }
     startNextQuestion(io, room);
   });
 }

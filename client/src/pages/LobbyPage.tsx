@@ -1,17 +1,18 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useSocket } from "../context/SocketContext";
-import { Player, PlayerJoinedPayload, PlayerLeftPayload, GameStartedPayload, HostChangedPayload } from "@shared/types";
+import { Player, RoomMode, PlayerJoinedPayload, PlayerLeftPayload, GameStartedPayload, HostChangedPayload, ModeChangedPayload, CategoryChoicesPayload } from "@shared/types";
 import * as E from "@shared/events";
 
 export default function LobbyPage() {
   const { roomCode } = useParams<{ roomCode: string }>();
-  const { state } = useLocation() as { state: { myId: string; isHost: boolean; players: Player[] } };
+  const { state } = useLocation() as { state: { myId: string; isHost: boolean; players: Player[]; mode?: RoomMode } };
   const socket = useSocket();
   const navigate = useNavigate();
 
   const [players, setPlayers] = useState<Player[]>(state?.players ?? []);
   const [isHost, setIsHost] = useState(state?.isHost ?? false);
+  const [mode, setMode] = useState<RoomMode>(state?.mode ?? "TOSSUP");
   const myId = state?.myId ?? socket.id;
 
   useEffect(() => {
@@ -36,21 +37,41 @@ export default function LobbyPage() {
       });
     }
 
+    function onModeChanged({ mode: m }: ModeChangedPayload) { setMode(m); }
+
+    function onCategoryChoices(_: CategoryChoicesPayload) {
+      // Category round started — drop into the game (sync-on-mount hydrates it).
+      navigate(`/game/${roomCode}`, {
+        state: {
+          myId, isHost, players,
+          snapshot: { gameState: "CATEGORY_SELECT", questionNumber: 0, revealedWords: [], isPastPowerMark: false },
+        },
+      });
+    }
+
     socket.on(E.S_PLAYER_JOINED, onPlayerJoined);
     socket.on(E.S_PLAYER_LEFT, onPlayerLeft);
     socket.on(E.S_HOST_CHANGED, onHostChanged);
     socket.on(E.S_GAME_STARTED, onGameStarted);
+    socket.on(E.S_MODE_CHANGED, onModeChanged);
+    socket.on(E.S_CATEGORY_CHOICES, onCategoryChoices);
 
     return () => {
       socket.off(E.S_PLAYER_JOINED, onPlayerJoined);
       socket.off(E.S_PLAYER_LEFT, onPlayerLeft);
       socket.off(E.S_HOST_CHANGED, onHostChanged);
       socket.off(E.S_GAME_STARTED, onGameStarted);
+      socket.off(E.S_MODE_CHANGED, onModeChanged);
+      socket.off(E.S_CATEGORY_CHOICES, onCategoryChoices);
     };
   }, [socket, roomCode, myId, isHost, navigate, state, players]);
 
   function startGame() {
     socket.emit(E.C_START_GAME, { roomCode });
+  }
+
+  function changeMode(m: RoomMode) {
+    socket.emit(E.C_SET_MODE, { roomCode, mode: m });
   }
 
   function leaveRoom() {
@@ -69,6 +90,41 @@ export default function LobbyPage() {
             {roomCode}
           </h1>
           <p style={{ color: "var(--text-muted)", fontSize: "0.8rem", marginTop: 8 }}>Share this code with other players</p>
+        </div>
+
+        {/* Game mode */}
+        <div className="card" style={{ marginBottom: 20 }}>
+          <h2 style={{ fontSize: "0.85rem", color: "var(--text-dim)", marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            Game Mode
+          </h2>
+          <div style={{ display: "flex", gap: 10 }}>
+            {(["TOSSUP", "CATEGORY"] as RoomMode[]).map((m) => {
+              const active = mode === m;
+              const label = m === "TOSSUP" ? "Tossup Round" : "Category Round";
+              return (
+                <button
+                  key={m}
+                  disabled={!isHost}
+                  onClick={() => changeMode(m)}
+                  style={{
+                    flex: 1, padding: "10px 12px", fontSize: "0.9rem", fontWeight: 600,
+                    borderRadius: "var(--radius)", cursor: isHost ? "pointer" : "default",
+                    border: `2px solid ${active ? "var(--accent)" : "var(--border)"}`,
+                    background: active ? "var(--accent-dim)" : "var(--bg-card)",
+                    color: active ? "var(--accent)" : "var(--text-dim)",
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", marginTop: 10 }}>
+            {mode === "TOSSUP"
+              ? "Buzz in as each question is read."
+              : "Host picks 2 of 3 categories; everyone answers 8 questions each (7s, +10 each)."}
+            {!isHost && " Only the host can change the mode."}
+          </p>
         </div>
 
         <div className="card" style={{ marginBottom: 20 }}>
