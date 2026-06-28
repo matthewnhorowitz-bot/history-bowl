@@ -8,6 +8,10 @@ const STOPWORDS = new Set([
   "de", "von", "van", "la", "le", "el", "du", "di", "da",
   "saint", "st", "war", "battle", "empire", "dynasty", "river", "lake",
   "mount", "mountain", "city", "sea", "king", "queen", "emperor", "president",
+  // generic nouns that are too common to identify an answer on their own
+  "army", "navy", "revolution", "rebellion", "republic", "kingdom",
+  "council", "congress", "party", "treaty", "alliance", "league",
+  "movement", "uprising", "campaign", "crusade", "expedition",
 ]);
 
 function normalize(s: string): string {
@@ -26,6 +30,58 @@ function significantWords(s: string): string[] {
   return normalize(s)
     .split(" ")
     .filter((w) => w.length >= 4 && !STOPWORDS.has(w));
+}
+
+// --- Regnal / ordinal numbers (Henry VIII, Louis XIV, World War II) ---
+// Many answers are only distinguished by a number, so the name alone is not
+// enough — "Henry" must not score when the answer is "Henry VIII".
+
+function romanToArabic(s: string): number | null {
+  const map: Record<string, number> = { i: 1, v: 5, x: 10, l: 50, c: 100, d: 500, m: 1000 };
+  const t = s.toLowerCase();
+  if (!/^[ivxlcdm]+$/.test(t)) return null;
+  let total = 0, prev = 0;
+  for (let k = t.length - 1; k >= 0; k--) {
+    const val = map[t[k]];
+    if (val < prev) total -= val;
+    else { total += val; prev = val; }
+  }
+  return total > 0 ? total : null;
+}
+
+const ORDINAL_WORDS: Record<string, number> = {
+  first: 1, second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, seventh: 7,
+  eighth: 8, ninth: 9, tenth: 10, eleventh: 11, twelfth: 12, thirteenth: 13,
+  fourteenth: 14, fifteenth: 15, sixteenth: 16, seventeenth: 17,
+  eighteenth: 18, nineteenth: 19, twentieth: 20,
+};
+
+// The regnal number an answer requires, e.g. "Louis XIV" -> 14; null if none.
+// Requires a capitalized name immediately followed by an UPPERCASE Roman
+// numeral ("Henry VIII", "World War II", "Pius X") so plain acronyms like
+// "CIA", "NATO", or "Washington, D.C." are not mistaken for regnal numbers.
+function requiredNumber(form: string): number | null {
+  const m = form.match(/\b[A-Z][a-z]+\s+([IVXLCDM]{1,6})\b/);
+  return m ? romanToArabic(m[1]) : null;
+}
+
+// Every number present in the player's input (Roman, Arabic, or ordinal word).
+function numbersIn(input: string): Set<number> {
+  const set = new Set<number>();
+  const norm = input.toLowerCase();
+  for (const m of norm.matchAll(/\b(\d{1,3})(?:st|nd|rd|th)?\b/g)) set.add(parseInt(m[1], 10));
+  for (const m of norm.matchAll(/\b([ivxlcdm]+)\b/g)) {
+    const v = romanToArabic(m[1]);
+    if (v) set.add(v);
+  }
+  for (const [w, n] of Object.entries(ORDINAL_WORDS)) {
+    if (new RegExp(`\\b${w}\\b`).test(norm)) set.add(n);
+  }
+  return set;
+}
+
+function isRomanWord(w: string): boolean {
+  return /^[ivxlcdm]+$/.test(w) && romanToArabic(w) !== null;
 }
 
 function threshold(len: number): number {
@@ -95,10 +151,16 @@ export function judgeAnswer(input: string, answerLine: string): Verdict {
   if (accept.length === 0) accept.push(answerLine);
 
   const inputForms = [ni, ...significantWords(input)];
+  const inputNumbers = numbersIn(input);
 
-  // 1) Full match against any acceptable answer → correct.
+  // 1) Full match against any acceptable answer → correct. For a numbered
+  //    answer (Elizabeth I), the input must carry the number too — otherwise
+  //    a bare "Elizabeth" is within fuzzy distance and would wrongly pass.
   for (const a of accept) {
-    if (fuzzyEqual(ni, normalize(a))) return "correct";
+    if (fuzzyEqual(ni, normalize(a))) {
+      const num = requiredNumber(a);
+      if (num === null || inputNumbers.has(num)) return "correct";
+    }
   }
 
   // 2) A writer's explicit "prompt on X" wins over partial-name leniency
@@ -108,11 +170,20 @@ export function judgeAnswer(input: string, answerLine: string): Verdict {
     if (inputForms.some((i) => forms.some((f) => fuzzyEqual(i, f)))) return "prompt";
   }
 
-  // 3) Just one part of the name is enough → correct.
+  // 3) Just one part of the name is enough → correct. BUT if the answer is
+  //    distinguished by a number (Henry VIII, Louis XIV, World War II), the
+  //    name alone is not enough — require the number, else prompt for it.
+  let nameOnlyNeedsNumber = false;
   for (const a of accept) {
-    const forms = significantWords(a);
-    if (inputForms.some((i) => forms.some((f) => fuzzyEqual(i, f)))) return "correct";
+    const num = requiredNumber(a);
+    const forms = significantWords(a).filter((w) => !isRomanWord(w));
+    const nameMatch = inputForms.some((i) => forms.some((f) => fuzzyEqual(i, f)));
+    if (!nameMatch) continue;
+    if (num === null) return "correct"; // ordinary partial-name match
+    if (inputNumbers.has(num)) return "correct"; // name + correct number
+    nameOnlyNeedsNumber = true; // right name, missing/wrong number
   }
+  if (nameOnlyNeedsNumber) return "prompt";
 
   // 4) Close but not quite → give them another chance (prompt).
   for (const a of accept) {
