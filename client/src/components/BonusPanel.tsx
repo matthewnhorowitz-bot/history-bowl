@@ -16,7 +16,7 @@ export default function BonusPanel({ bonus, myTeamId, answered, timerRemaining, 
   return (
     <div style={{ maxWidth: 680, margin: "0 auto", paddingTop: 8 }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 8 }}>
-        <h2 style={{ color: "var(--accent)", fontSize: "1.1rem" }}>Bonus Question (+10)</h2>
+        <h2 style={{ color: "var(--accent)", fontSize: "1.1rem" }}>Bonus — the rest of the question (+10)</h2>
         <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>
           for <strong style={{ color: "var(--text)" }}>{bonus.teamName}</strong>
         </span>
@@ -34,7 +34,7 @@ export default function BonusPanel({ bonus, myTeamId, answered, timerRemaining, 
         ) : (
           <div className="card" style={{ borderColor: "var(--accent)" }}>
             <p style={{ color: "var(--accent)", fontWeight: 700, marginBottom: 12, fontSize: "0.9rem" }}>
-              Your team's bonus — type an answer!
+              Your team's bonus — give the answer to the full question!
             </p>
             <AnswerInput onSubmit={onSubmit} timerRemaining={timerRemaining} maxSeconds={GAME_BONUS_TIMER_S} />
           </div>

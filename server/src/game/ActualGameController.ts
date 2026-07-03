@@ -286,9 +286,11 @@ function endBuzzQuestion(io: Server, room: Room): void {
 
 function startBonus(io: Server, room: Room, teamId: string): void {
   clearGameTimers(room);
-  const q = takeQuestion(room);
+  const q = room.currentQuestion;
   if (!q) { endBuzzQuestion(io, room); return; }
 
+  // The bonus is the "next part" of the SAME question: finish reading it (show
+  // the complete question) and let the winning team give the answer for +10.
   room.bonusTeamId = teamId;
   room.bonusQuestion = q;
   room.bonusAnswered = false;

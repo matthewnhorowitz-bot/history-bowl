@@ -82,7 +82,7 @@ export default function ActualGamePage({ roomCode, myId, isHost, players, snapsh
           <>
             <div className="card" style={{ flex: 1 }}>
               {game.revealedWords.length > 0
-                ? <QuestionDisplay words={game.revealedWords} isPastPowerMark={game.isPastPowerMark} />
+                ? <QuestionDisplay words={game.revealedWords} isPastPowerMark={game.quarter === 4 && game.isPastPowerMark} />
                 : <p style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>Reading question…</p>}
             </div>
             <BuzzPanel
