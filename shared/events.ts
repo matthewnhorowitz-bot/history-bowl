@@ -35,3 +35,15 @@ export const S_CATEGORY_QUESTION = "category-question";
 export const S_CATEGORY_REVEAL = "category-reveal";
 export const S_CATEGORY_END = "category-end";
 export const S_TEAMS_UPDATED = "teams-updated";
+
+// Server → Client — "Actual Game" (four-quarter) mode
+export const S_QUARTER_STARTED = "quarter-started";
+export const S_GAME_QUESTION_START = "game-question-start"; // new buzz question within a quarter
+export const S_GAME_BUZZ = "game-buzz";               // buzz accepted (team-aware)
+export const S_GAME_ANSWER_RESULT = "game-answer-result";
+export const S_BONUS_QUESTION = "bonus-question";     // Q2 bonus offered to the winning team
+export const S_GAME_QUESTION_END = "game-question-end";
+export const S_GAME_CAT_CHOICES = "game-cat-choices"; // Q3 category selection (losing team picks first)
+export const S_GAME_CAT_QUESTION = "game-cat-question";
+export const S_GAME_CAT_REVEAL = "game-cat-reveal";
+export const S_GAME_END = "game-end";

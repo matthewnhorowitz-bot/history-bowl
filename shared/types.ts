@@ -1,8 +1,10 @@
 export type GameState =
   | "LOBBY" | "READING" | "BUZZED" | "ANSWER_PHASE" | "BETWEEN"
-  | "CATEGORY_SELECT" | "CATEGORY_PLAYING";
+  | "CATEGORY_SELECT" | "CATEGORY_PLAYING"
+  // "Actual Game" (four-quarter) mode. Q1/Q2/Q4 reuse READING/BUZZED/ANSWER_PHASE/BETWEEN.
+  | "GAME_BONUS" | "GAME_CAT_SELECT" | "GAME_CAT_PLAYING" | "GAME_END";
 
-export type RoomMode = "TOSSUP" | "CATEGORY";
+export type RoomMode = "TOSSUP" | "CATEGORY" | "GAME";
 
 // Third Quarter category data (bundled)
 export interface CategoryQA {
@@ -107,6 +109,14 @@ export interface SyncPayload {
   teams: Team[];
   teamPlay: boolean;
   myTeamId: string | null;
+  // "Actual Game" (four-quarter) mode — null/absent in the other modes.
+  quarter: number | null;          // 1..4, or null when not in a game
+  quarterName: string | null;
+  lockedTeamIds: string[];         // teams locked out of the current buzz question
+  bonus: BonusQuestionPayload | null;
+  gameCatChoices: GameCatChoicesPayload | null;
+  gameCatQuestion: GameCatQuestionPayload | null;
+  winnerTeamId: string | null;     // set once the game has ended
 }
 
 // ---- Category (Third Quarter) payloads ----
@@ -215,4 +225,89 @@ export interface ErrorPayload {
 
 export interface HostChangedPayload {
   newHostId: string;
+}
+
+// ---- "Actual Game" (four-quarter) payloads ----
+export interface QuarterStartedPayload {
+  quarter: number;        // 1..4
+  name: string;           // e.g. "First Quarter"
+  questionCount: number;  // questions in this quarter
+  teams: Team[];
+}
+
+// A new buzz question (Q1/Q2/Q4) begins — client resets its per-question UI.
+export interface GameQuestionStartPayload {
+  quarter: number;
+  questionIndex: number;  // 0-based within the quarter
+  count: number;          // questions in this quarter
+}
+
+// Buzz accepted in a buzz quarter (Q1/Q2/Q4). Team-aware.
+export interface GameBuzzPayload {
+  buzzedBy: { id: string; name: string };
+  teamId: string;
+  teamName: string;
+  wordIndex: number;
+  timerSeconds: number;
+  prompt: boolean;        // true on a "be more specific" retry for the same player
+}
+
+export interface GameAnswerResultPayload {
+  correct: boolean;
+  delta: number;
+  tier: number | null;    // Q4 point tier (30/20/10), else null
+  buzzedBy: { id: string; name: string };
+  teamId: string;
+  answer: string;
+  lockedTeamId: string | null; // team just locked out (on a wrong answer)
+  resume: boolean;             // reading/buzz window reopened for the other team
+  teams: Team[];
+}
+
+export interface BonusQuestionPayload {
+  text: string;           // full bonus question text
+  answerVisible: boolean; // false while open, unused client-side (kept for parity)
+  timerSeconds: number;
+  teamId: string;         // only this team may answer
+  teamName: string;
+}
+
+export interface GameQuestionEndPayload {
+  quarter: number;
+  fullText: string;
+  answer: string;
+  teams: Team[];
+  isLast: boolean;        // last question of the quarter
+}
+
+export interface GameCatChoicesPayload {
+  titles: string[];              // the 3 category titles
+  firstPickerTeamId: string;     // losing team picks first
+  firstPickerName: string;
+}
+
+export interface GameCatQuestionPayload {
+  categoryTitle: string;
+  intro: string;
+  clue: string;
+  catNumber: number;      // 1 or 2
+  indexInCat: number;     // 1..8
+  questionIndex: number;  // 0..15
+  total: number;          // 16
+  ownerTeamId: string;    // team the question is directed at
+  ownerName: string;
+  bounce: boolean;        // true when it has bounced to the other team
+  timerSeconds: number;
+}
+
+export interface GameCatRevealPayload {
+  questionIndex: number;
+  answer: string;
+  correctTeamId: string | null; // team that answered correctly, or null
+  teams: Team[];
+}
+
+export interface GameEndPayload {
+  teams: Team[];
+  winnerTeamId: string | null; // null on a tie
 }

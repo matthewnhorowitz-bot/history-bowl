@@ -4,16 +4,19 @@ import { startNextQuestion } from "../game/GameController";
 import {
   startCategoryRound, chooseCategories, submitCategoryAnswer, currentCategoryQuestion,
 } from "../game/CategoryController";
+import {
+  startActualGame, advanceGame, chooseGameCategories, submitGameCatAnswer, syncActualGame,
+} from "../game/ActualGameController";
 import { getInitialPool } from "../questions/questionCache";
 import { RoomMode } from "../../../shared/types";
 import * as E from "../../../shared/events";
 
 export function registerGameHandlers(io: Server, socket: Socket): void {
-  // Host toggles Tossup vs Category round in the lobby.
+  // Host toggles Tossup / Category / Actual Game in the lobby.
   socket.on(E.C_SET_MODE, ({ roomCode, mode }: { roomCode: string; mode: RoomMode }) => {
     const room = rooms.get(roomCode);
     if (!room || room.hostSocketId !== socket.id || room.state !== "LOBBY") return;
-    if (mode !== "TOSSUP" && mode !== "CATEGORY") return;
+    if (mode !== "TOSSUP" && mode !== "CATEGORY" && mode !== "GAME") return;
     room.mode = mode;
     io.to(room.code).emit(E.S_MODE_CHANGED, { mode });
   });
@@ -32,6 +35,16 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
       return;
     }
 
+    if (room.mode === "GAME") {
+      const teams = Array.from(room.teams.values());
+      if (teams.length !== 2 || teams.some((t) => t.memberIds.size === 0)) {
+        socket.emit(E.S_ERROR, { message: "Form exactly two non-empty teams to start", code: "NEED_TWO_TEAMS" });
+        return;
+      }
+      await startActualGame(io, room);
+      return;
+    }
+
     try {
       room.questionPool = await getInitialPool();
     } catch {
@@ -45,13 +58,15 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
   socket.on(E.C_CHOOSE_CATEGORIES, ({ roomCode, indices }: { roomCode: string; indices: number[] }) => {
     const room = rooms.get(roomCode);
     if (!room || room.hostSocketId !== socket.id) return;
-    chooseCategories(io, room, indices);
+    if (room.mode === "GAME") chooseGameCategories(io, room, indices);
+    else chooseCategories(io, room, indices);
   });
 
   socket.on(E.C_SUBMIT_CATEGORY_ANSWER, ({ roomCode, answer }: { roomCode: string; answer: string }) => {
     const room = rooms.get(roomCode);
     if (!room) return;
-    submitCategoryAnswer(io, room, socket.id, answer ?? "");
+    if (room.mode === "GAME") submitGameCatAnswer(io, room, socket.id, answer ?? "");
+    else submitCategoryAnswer(io, room, socket.id, answer ?? "");
   });
 
   // A client (e.g. one that just navigated into the game) asks for the
@@ -77,6 +92,7 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
       teams: getTeams(room),
       teamPlay: room.teamPlay,
       myTeamId: room.players.get(socket.id)?.teamId ?? null,
+      ...syncActualGame(room),
     });
   });
 
@@ -86,6 +102,10 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
     if (room.hostSocketId !== socket.id) return;
     if (room.state !== "BETWEEN") return;
 
+    if (room.mode === "GAME") {
+      advanceGame(io, room);
+      return;
+    }
     if (room.mode === "CATEGORY") {
       startCategoryRound(io, room); // new trio of categories
       return;

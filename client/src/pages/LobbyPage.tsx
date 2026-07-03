@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useSocket } from "../context/SocketContext";
-import { Player, RoomMode, Team, PlayerJoinedPayload, PlayerLeftPayload, GameStartedPayload, HostChangedPayload, ModeChangedPayload, CategoryChoicesPayload, TeamsUpdatedPayload } from "@shared/types";
+import { Player, RoomMode, Team, PlayerJoinedPayload, PlayerLeftPayload, GameStartedPayload, HostChangedPayload, ModeChangedPayload, CategoryChoicesPayload, TeamsUpdatedPayload, QuarterStartedPayload } from "@shared/types";
 import * as E from "@shared/events";
 
 export default function LobbyPage() {
@@ -54,12 +54,23 @@ export default function LobbyPage() {
       });
     }
 
+    function onQuarterStarted(_: QuarterStartedPayload) {
+      // Actual Game started (First Quarter) — drop into the game page in GAME mode.
+      navigate(`/game/${roomCode}`, {
+        state: {
+          myId, isHost, players, mode: "GAME" as RoomMode,
+          snapshot: { gameState: "READING", questionNumber: 0, revealedWords: [], isPastPowerMark: false },
+        },
+      });
+    }
+
     socket.on(E.S_PLAYER_JOINED, onPlayerJoined);
     socket.on(E.S_PLAYER_LEFT, onPlayerLeft);
     socket.on(E.S_HOST_CHANGED, onHostChanged);
     socket.on(E.S_GAME_STARTED, onGameStarted);
     socket.on(E.S_MODE_CHANGED, onModeChanged);
     socket.on(E.S_CATEGORY_CHOICES, onCategoryChoices);
+    socket.on(E.S_QUARTER_STARTED, onQuarterStarted);
     socket.on(E.S_TEAMS_UPDATED, onTeamsUpdated);
 
     return () => {
@@ -69,6 +80,7 @@ export default function LobbyPage() {
       socket.off(E.S_GAME_STARTED, onGameStarted);
       socket.off(E.S_MODE_CHANGED, onModeChanged);
       socket.off(E.S_CATEGORY_CHOICES, onCategoryChoices);
+      socket.off(E.S_QUARTER_STARTED, onQuarterStarted);
       socket.off(E.S_TEAMS_UPDATED, onTeamsUpdated);
     };
   }, [socket, roomCode, myId, isHost, navigate, state, players]);
@@ -117,16 +129,16 @@ export default function LobbyPage() {
             Game Mode
           </h2>
           <div style={{ display: "flex", gap: 10 }}>
-            {(["TOSSUP", "CATEGORY"] as RoomMode[]).map((m) => {
+            {(["TOSSUP", "CATEGORY", "GAME"] as RoomMode[]).map((m) => {
               const active = mode === m;
-              const label = m === "TOSSUP" ? "Tossup Round" : "Category Round";
+              const label = m === "TOSSUP" ? "Tossup Round" : m === "CATEGORY" ? "Category Round" : "Actual Game";
               return (
                 <button
                   key={m}
                   disabled={!isHost}
                   onClick={() => changeMode(m)}
                   style={{
-                    flex: 1, padding: "10px 12px", fontSize: "0.9rem", fontWeight: 600,
+                    flex: 1, padding: "10px 8px", fontSize: "0.82rem", fontWeight: 600,
                     borderRadius: "var(--radius)", cursor: isHost ? "pointer" : "default",
                     border: `2px solid ${active ? "var(--accent)" : "var(--border)"}`,
                     background: active ? "var(--accent-dim)" : "var(--bg-card)",
@@ -141,19 +153,23 @@ export default function LobbyPage() {
           <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", marginTop: 10 }}>
             {mode === "TOSSUP"
               ? "Buzz in as each question is read."
-              : "Host picks 2 of 3 categories; answer 16 questions (10s, +10 each). Make teams below to play as teams."}
+              : mode === "CATEGORY"
+              ? "Host picks 2 of 3 categories; answer 16 questions (10s, +10 each). Make teams below to play as teams."
+              : "Full four-quarter match between two teams. Form exactly two teams below, then start."}
             {!isHost && " Only the host can change the mode."}
           </p>
         </div>
 
-        {/* Teams (category round only) */}
-        {mode === "CATEGORY" && (
+        {/* Teams (category round & actual game) */}
+        {(mode === "CATEGORY" || mode === "GAME") && (
           <div className="card" style={{ marginBottom: 20 }}>
             <h2 style={{ fontSize: "0.85rem", color: "var(--text-dim)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.08em" }}>
               Teams
             </h2>
             <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", marginBottom: 14 }}>
-              Optional — make or join a team to play as a team (first teammate to answer locks it in). No teams = everyone plays solo.
+              {mode === "GAME"
+                ? "Required — form exactly two teams. Everyone must join one; the two team scores decide the match."
+                : "Optional — make or join a team to play as a team (first teammate to answer locks it in). No teams = everyone plays solo."}
             </p>
 
             {teams.length > 0 && (
@@ -234,10 +250,12 @@ export default function LobbyPage() {
             <button
               className="btn-primary"
               onClick={startGame}
-              disabled={players.length < 1}
+              disabled={mode === "GAME" ? !(teams.length === 2 && teams.every((t) => t.memberIds.length > 0)) : players.length < 1}
               style={{ flex: 1 }}
             >
-              Start Game
+              {mode === "GAME" && !(teams.length === 2 && teams.every((t) => t.memberIds.length > 0))
+                ? "Need two teams"
+                : "Start Game"}
             </button>
           )}
           {!isHost && (

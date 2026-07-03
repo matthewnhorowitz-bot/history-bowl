@@ -28,7 +28,7 @@ export interface Room {
   cleanupTimer: ReturnType<typeof setTimeout> | null;
   // Category (Third Quarter) mode
   trio: CategoryTrio | null;
-  catQuestions: { categoryTitle: string; intro: string; catNumber: number; indexInCat: number; qa: CategoryQA }[];
+  catQuestions: { categoryTitle: string; intro: string; catNumber: number; indexInCat: number; qa: CategoryQA; ownerTeamId?: string }[];
   catIndex: number;
   catAnswered: Set<string>;
   catCorrect: Set<string>;
@@ -37,6 +37,17 @@ export interface Room {
   // Teams (category round only)
   teams: Map<string, TeamState>;
   teamPlay: boolean; // true when the current category round is team-based
+  // "Actual Game" (four-quarter) mode
+  quarter: number;              // 0 when not in a game, else 1..4
+  quarterIndex: number;         // question # within the current quarter (0-based)
+  lockedOutTeams: Set<string>;  // teams locked out of the current buzz question
+  bonusTeamId: string | null;   // Q2 bonus is offered only to this team
+  bonusQuestion: Question | null;
+  bonusAnswered: boolean;
+  catOwnerTeamId: string | null; // Q3: team the current question is directed at
+  catBounce: boolean;            // Q3: true once the question has bounced to the other team
+  firstPickerTeamId: string | null; // Q3: losing team, which picks the first category
+  winnerTeamId: string | null;   // set when the game ends
 }
 
 export const rooms = new Map<string, Room>();
@@ -76,6 +87,16 @@ export function createRoom(code: string, hostSocketId: string, hostName: string)
     catTimer: null,
     teams: new Map(),
     teamPlay: false,
+    quarter: 0,
+    quarterIndex: 0,
+    lockedOutTeams: new Set(),
+    bonusTeamId: null,
+    bonusQuestion: null,
+    bonusAnswered: false,
+    catOwnerTeamId: null,
+    catBounce: false,
+    firstPickerTeamId: null,
+    winnerTeamId: null,
   };
   rooms.set(code, room);
   return room;
