@@ -1,4 +1,4 @@
-import { GameState, Player, Question, RoomMode, CategoryTrio, CategoryQA, Team } from "../../shared/types";
+import { GameState, Player, Question, RoomMode, CategoryTrio, CategoryQA, Team, Q2Pair } from "../../shared/types";
 
 export interface TeamState {
   id: string;
@@ -44,6 +44,8 @@ export interface Room {
   bonusTeamId: string | null;   // Q2 bonus is offered only to this team
   bonusQuestion: Question | null;
   bonusAnswered: boolean;
+  q2Pool: Q2Pair[];             // Second Quarter tossup+bonus pairs for this game
+  currentBonus: { question: string; answer: string } | null; // real bonus for the current Q2 question
   catOwnerTeamId: string | null; // Q3: team the current question is directed at
   catBounce: boolean;            // Q3: true once the question has bounced to the other team
   firstPickerTeamId: string | null; // Q3: losing team, which picks the first category
@@ -93,6 +95,8 @@ export function createRoom(code: string, hostSocketId: string, hostName: string)
     bonusTeamId: null,
     bonusQuestion: null,
     bonusAnswered: false,
+    q2Pool: [],
+    currentBonus: null,
     catOwnerTeamId: null,
     catBounce: false,
     firstPickerTeamId: null,

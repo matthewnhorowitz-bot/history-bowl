@@ -1,8 +1,10 @@
 import { Server } from "socket.io";
 import { Room, TeamState, getTeams } from "../rooms";
+import { Question } from "../../../shared/types";
 import { judgeAnswer } from "../utils/answerValidator";
 import { getInitialPool, maybeRefetch } from "../questions/questionCache";
 import { getRandomTrio } from "../questions/categoryCache";
+import { getQ2Pool } from "../questions/bonusCache";
 import {
   WORD_INTERVAL_MS,
   END_BUZZ_WINDOW_S,
@@ -96,6 +98,8 @@ export async function startActualGame(io: Server, room: Room): Promise<void> {
     io.to(room.code).emit(E.S_ERROR, { message: "Failed to load questions", code: "QUESTION_LOAD_FAIL" });
     return;
   }
+  // Real Second Quarter tossup+bonus pairs (parsed from IAC packets).
+  room.q2Pool = getQ2Pool(Q2_COUNT + 4);
 
   room.quarter = 1;
   room.quarterIndex = 0;
@@ -114,7 +118,26 @@ function takeQuestion(room: Room) {
 }
 
 function startBuzzQuestion(io: Server, room: Room): void {
-  const question = takeQuestion(room);
+  let question: Question | null;
+  if (room.quarter === 2) {
+    // Second Quarter: a real tossup+bonus pair. Read the tossup like a tossup
+    // (flat +10, no power mark); its bonus is the winning team's follow-up.
+    const pair = room.q2Pool.shift();
+    if (!pair) { endBuzzQuestion(io, room); return; }
+    question = {
+      id: `q2-${room.questionNumber++}`,
+      questionText: pair.tossup,
+      words: pair.tossup.split(" ").filter(Boolean),
+      powerMarkIndex: Number.MAX_SAFE_INTEGER,
+      answer: pair.tossupAnswer,
+      answerRaw: pair.tossupAnswer,
+      category: "", subcategory: "", difficulty: 0, setName: pair.setName, year: 0,
+    };
+    room.currentBonus = { question: pair.bonus, answer: pair.bonusAnswer };
+  } else {
+    question = takeQuestion(room);
+    room.currentBonus = null;
+  }
   if (!question) { endGame(io, room); return; }
 
   room.currentQuestion = question;
@@ -286,18 +309,16 @@ function endBuzzQuestion(io: Server, room: Room): void {
 
 function startBonus(io: Server, room: Room, teamId: string): void {
   clearGameTimers(room);
-  const q = room.currentQuestion;
-  if (!q) { endBuzzQuestion(io, room); return; }
+  const bonus = room.currentBonus;
+  if (!bonus) { endBuzzQuestion(io, room); return; }
 
-  // The bonus is the "next part" of the SAME question: finish reading it (show
-  // the complete question) and let the winning team give the answer for +10.
+  // A real supplemental bonus question, offered only to the team that won the tossup.
   room.bonusTeamId = teamId;
-  room.bonusQuestion = q;
   room.bonusAnswered = false;
   room.state = "GAME_BONUS";
 
   io.to(room.code).emit(E.S_BONUS_QUESTION, {
-    text: q.questionText,
+    text: bonus.question,
     answerVisible: false,
     timerSeconds: GAME_BONUS_TIMER_S,
     teamId, teamName: teamName(room, teamId),
@@ -307,10 +328,10 @@ function startBonus(io: Server, room: Room, teamId: string): void {
 }
 
 function handleBonusAnswer(io: Server, room: Room, socketId: string, answer: string): void {
-  if (room.state !== "GAME_BONUS" || room.bonusAnswered) return;
+  if (room.state !== "GAME_BONUS" || room.bonusAnswered || !room.currentBonus) return;
   if (teamOf(room, socketId) !== room.bonusTeamId) return; // only the winning team
   room.bonusAnswered = true;
-  const correct = judgeAnswer(answer, room.bonusQuestion!.answer) === "correct";
+  const correct = judgeAnswer(answer, room.currentBonus.answer) === "correct";
   finishBonus(io, room, correct, answer);
 }
 
@@ -322,7 +343,8 @@ function finishBonus(io: Server, room: Room, correct: boolean, answer: string): 
     correct, delta: correct ? GAME_BONUS_SCORE : 0, tier: null,
     buzzedBy: { id: "", name: teamName(room, room.bonusTeamId) },
     teamId: room.bonusTeamId ?? "",
-    answer: answer || room.bonusQuestion!.answerRaw || room.bonusQuestion!.answer,
+    // Reveal the correct bonus answer when the team missed it.
+    answer: answer || room.currentBonus?.answer || "",
     lockedTeamId: null,
     resume: false,
     teams: getTeams(room),
@@ -534,9 +556,9 @@ export function syncActualGame(room: Room) {
     quarter: inGame ? room.quarter : null,
     quarterName: inGame ? quarterName(room.quarter) : null,
     lockedTeamIds: Array.from(room.lockedOutTeams),
-    bonus: room.state === "GAME_BONUS" && room.bonusQuestion
+    bonus: room.state === "GAME_BONUS" && room.currentBonus
       ? {
-          text: room.bonusQuestion.questionText,
+          text: room.currentBonus.question,
           answerVisible: false,
           timerSeconds: GAME_BONUS_TIMER_S,
           teamId: room.bonusTeamId ?? "",

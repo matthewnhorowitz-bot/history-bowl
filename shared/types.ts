@@ -39,6 +39,15 @@ export interface Team {
   memberIds: string[];
 }
 
+// Second Quarter tossup+bonus pair (parsed from IAC packet PDFs).
+export interface Q2Pair {
+  tossup: string;
+  tossupAnswer: string;
+  bonus: string;
+  bonusAnswer: string;
+  setName: string;
+}
+
 export interface Question {
   id: string;
   questionText: string;
