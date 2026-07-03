@@ -1,5 +1,5 @@
 import { Server, Socket } from "socket.io";
-import { rooms, getPlayers, getTeams } from "../rooms";
+import { rooms, getPlayers, getTeams, generateTeamId } from "../rooms";
 import { startNextQuestion } from "../game/GameController";
 import {
   startCategoryRound, chooseCategories, submitCategoryAnswer, currentCategoryQuestion,
@@ -36,9 +36,22 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
     }
 
     if (room.mode === "GAME") {
+      // Solo/single-team play is allowed. With no teams, auto-create one from
+      // every player so a lone host can start with zero setup.
+      if (room.teams.size === 0) {
+        const id = generateTeamId();
+        const memberIds = new Set(room.players.keys());
+        room.teams.set(id, { id, name: "Team 1", score: 0, memberIds });
+        for (const p of room.players.values()) p.teamId = id;
+        io.to(room.code).emit(E.S_TEAMS_UPDATED, { teams: getTeams(room) });
+      }
       const teams = Array.from(room.teams.values());
-      if (teams.length !== 2 || teams.some((t) => t.memberIds.size === 0)) {
-        socket.emit(E.S_ERROR, { message: "Form exactly two non-empty teams to start", code: "NEED_TWO_TEAMS" });
+      if (teams.length > 2) {
+        socket.emit(E.S_ERROR, { message: "An Actual Game supports at most two teams", code: "TOO_MANY_TEAMS" });
+        return;
+      }
+      if (teams.some((t) => t.memberIds.size === 0)) {
+        socket.emit(E.S_ERROR, { message: "Every team must have at least one player", code: "EMPTY_TEAM" });
         return;
       }
       await startActualGame(io, room);

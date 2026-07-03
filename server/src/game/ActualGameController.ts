@@ -73,13 +73,14 @@ function clearGameTimers(room: Room): void {
   if (room.catTimer) { clearTimeout(room.catTimer); room.catTimer = null; }
 }
 
-// Q4 approximation: award 30/20/10 by how early the team buzzed.
+// Q4 approximation: award 30/20/10 by how early the team buzzed. Thresholds are
+// clamped so the three tiers stay strictly ordered (high < mid) for any question,
+// preventing the mid tier from collapsing into high or low.
 function scoreForTier(buzzedAtWord: number, wordCount: number, powerMarkIndex: number): number {
-  const highThreshold = Math.max(1, Math.floor(wordCount * Q4_HIGH_FRACTION));
-  let midThreshold = powerMarkIndex;
-  if (midThreshold <= highThreshold) midThreshold = Math.floor(wordCount * 0.66);
-  if (buzzedAtWord < highThreshold) return Q4_SCORE_HIGH;
-  if (buzzedAtWord < midThreshold) return Q4_SCORE_MID;
+  const high = Math.max(1, Math.floor(wordCount * Q4_HIGH_FRACTION));
+  const mid = Math.max(high + 1, Math.min(powerMarkIndex, Math.floor(wordCount * 0.66)));
+  if (buzzedAtWord < high) return Q4_SCORE_HIGH;
+  if (buzzedAtWord < mid) return Q4_SCORE_MID;
   return Q4_SCORE_LOW;
 }
 
@@ -419,7 +420,9 @@ export function chooseGameCategories(io: Server, room: Room, indices: number[]):
   if (unique.length !== 2) return;
 
   const firstPicker = room.firstPickerTeamId;
-  const secondPicker = otherTeamId(room, firstPicker);
+  // With a single team there is no opponent, so that team owns both categories
+  // (otherwise the second category's questions would be unanswerable).
+  const secondPicker = otherTeamId(room, firstPicker) ?? firstPicker;
   const owners = [firstPicker, secondPicker];
 
   room.catQuestions = [];
@@ -506,11 +509,11 @@ export function submitGameCatAnswer(io: Server, room: Room, socketId: string, an
 // The team currently on the clock failed (wrong answer or timeout).
 function failCurrentCat(io: Server, room: Room): void {
   if (!room.catOpen) return; // already resolved/revealed
-  if (!room.catBounce) {
+  const other = otherTeamId(room, room.catOwnerTeamId);
+  if (!room.catBounce && other) {
     // Bounce to the other team.
     room.catBounce = true;
     if (room.catTimer) { clearTimeout(room.catTimer); room.catTimer = null; }
-    const other = otherTeamId(room, room.catOwnerTeamId);
     emitCatQuestion(io, room, other, true, GAME_BOUNCEBACK_TIMER_S);
     room.catTimer = setTimeout(() => failCurrentCat(io, room), GAME_BOUNCEBACK_TIMER_S * 1000);
   } else {

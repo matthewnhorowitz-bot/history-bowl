@@ -155,7 +155,7 @@ export default function LobbyPage() {
               ? "Buzz in as each question is read."
               : mode === "CATEGORY"
               ? "Host picks 2 of 3 categories; answer 16 questions (10s, +10 each). Make teams below to play as teams."
-              : "Full four-quarter match between two teams. Form exactly two teams below, then start."}
+              : "Full four-quarter match. Play solo, or form up to two teams below, then start."}
             {!isHost && " Only the host can change the mode."}
           </p>
         </div>
@@ -168,7 +168,7 @@ export default function LobbyPage() {
             </h2>
             <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", marginBottom: 14 }}>
               {mode === "GAME"
-                ? "Required — form exactly two teams. Everyone must join one; the two team scores decide the match."
+                ? "Optional — play solo, or form up to two teams. With no teams, everyone plays together as one team."
                 : "Optional — make or join a team to play as a team (first teammate to answer locks it in). No teams = everyone plays solo."}
             </p>
 
@@ -250,12 +250,10 @@ export default function LobbyPage() {
             <button
               className="btn-primary"
               onClick={startGame}
-              disabled={mode === "GAME" ? !(teams.length === 2 && teams.every((t) => t.memberIds.length > 0)) : players.length < 1}
+              disabled={mode === "GAME" ? (players.length < 1 || teams.length > 2) : players.length < 1}
               style={{ flex: 1 }}
             >
-              {mode === "GAME" && !(teams.length === 2 && teams.every((t) => t.memberIds.length > 0))
-                ? "Need two teams"
-                : "Start Game"}
+              {mode === "GAME" && teams.length > 2 ? "Too many teams (max 2)" : "Start Game"}
             </button>
           )}
           {!isHost && (
