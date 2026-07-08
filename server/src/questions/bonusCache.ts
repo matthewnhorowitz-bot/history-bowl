@@ -1,4 +1,5 @@
-import { Q2Pair } from "../../../shared/types";
+import { Q2Pair, DifficultyFilter } from "../../../shared/types";
+import { filterByDifficulty } from "../../../shared/difficulty";
 import bonuses from "./iacBonuses.json";
 
 const ALL: Q2Pair[] = bonuses as Q2Pair[];
@@ -12,9 +13,10 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-// A fresh shuffled batch of real Second Quarter tossup+bonus pairs.
-export function getQ2Pool(n: number): Q2Pair[] {
-  return shuffle(ALL).slice(0, n);
+// A fresh shuffled batch of real Second Quarter tossup+bonus pairs, restricted to
+// packets matching the chosen difficulty (null = any).
+export function getQ2Pool(n: number, difficulty: DifficultyFilter = null): Q2Pair[] {
+  return shuffle(filterByDifficulty(ALL, difficulty)).slice(0, n);
 }
 
 export function totalBonuses(): number {

@@ -94,13 +94,13 @@ export async function startActualGame(io: Server, room: Room): Promise<void> {
   for (const t of room.teams.values()) t.score = 0;
 
   try {
-    room.questionPool = await getInitialPool();
+    room.questionPool = await getInitialPool(room.difficulty);
   } catch {
     io.to(room.code).emit(E.S_ERROR, { message: "Failed to load questions", code: "QUESTION_LOAD_FAIL" });
     return;
   }
   // Real Second Quarter tossup+bonus pairs (parsed from IAC packets).
-  room.q2Pool = getQ2Pool(Q2_COUNT + 4);
+  room.q2Pool = getQ2Pool(Q2_COUNT + 4, room.difficulty);
 
   room.quarter = 1;
   room.quarterIndex = 0;
@@ -114,7 +114,7 @@ export async function startActualGame(io: Server, room: Room): Promise<void> {
 
 function takeQuestion(room: Room) {
   const q = room.questionPool.shift();
-  maybeRefetch(room.questionPool).then((updated) => { room.questionPool = updated; });
+  maybeRefetch(room.questionPool, room.difficulty).then((updated) => { room.questionPool = updated; });
   return q ?? null;
 }
 
@@ -316,20 +316,54 @@ function startBonus(io: Server, room: Room, teamId: string): void {
   // A real supplemental bonus question, offered only to the team that won the tossup.
   room.bonusTeamId = teamId;
   room.bonusAnswered = false;
+  room.bonusReadIndex = 0;
+  room.bonusReadingDone = false;
   room.state = "GAME_BONUS";
 
+  // Read the bonus out word-by-word first; the answer window (and its countdown)
+  // only opens once reading is done.
   io.to(room.code).emit(E.S_BONUS_QUESTION, {
     text: bonus.question,
     answerVisible: false,
     timerSeconds: GAME_BONUS_TIMER_S,
     teamId, teamName: teamName(room, teamId),
+    reading: true,
+    revealedWords: [],
   });
 
+  startBonusReading(io, room);
+}
+
+function startBonusReading(io: Server, room: Room): void {
+  if (room.readingTimer) { clearInterval(room.readingTimer); room.readingTimer = null; }
+  const words = (room.currentBonus?.question ?? "").split(" ").filter(Boolean);
+  if (words.length === 0) { finishBonusReading(io, room); return; }
+
+  room.readingTimer = setInterval(() => {
+    if (room.state !== "GAME_BONUS") {
+      clearInterval(room.readingTimer!);
+      room.readingTimer = null;
+      return;
+    }
+    io.to(room.code).emit(E.S_BONUS_WORD, { word: words[room.bonusReadIndex], wordIndex: room.bonusReadIndex });
+    room.bonusReadIndex++;
+    if (room.bonusReadIndex >= words.length) {
+      clearInterval(room.readingTimer!);
+      room.readingTimer = null;
+      finishBonusReading(io, room);
+    }
+  }, WORD_INTERVAL_MS);
+}
+
+function finishBonusReading(io: Server, room: Room): void {
+  room.bonusReadingDone = true;
+  io.to(room.code).emit(E.S_BONUS_READY, { timerSeconds: GAME_BONUS_TIMER_S });
   room.answerTimer = setTimeout(() => finishBonus(io, room, false, ""), GAME_BONUS_TIMER_S * 1000);
 }
 
 function handleBonusAnswer(io: Server, room: Room, socketId: string, answer: string): void {
   if (room.state !== "GAME_BONUS" || room.bonusAnswered || !room.currentBonus) return;
+  if (!room.bonusReadingDone) return; // can't answer until the bonus has been fully read
   if (teamOf(room, socketId) !== room.bonusTeamId) return; // only the winning team
   room.bonusAnswered = true;
   const correct = judgeAnswer(answer, room.currentBonus.answer) === "correct";
@@ -391,7 +425,7 @@ function startQ3(io: Server, room: Room): void {
   clearGameTimers(room);
   room.quarter = 3;
   room.quarterIndex = 0;
-  room.trio = getRandomTrio();
+  room.trio = getRandomTrio(room.difficulty);
   room.catQuestions = [];
   room.catIndex = 0;
   room.catOpen = false;
@@ -566,6 +600,8 @@ export function syncActualGame(room: Room) {
           timerSeconds: GAME_BONUS_TIMER_S,
           teamId: room.bonusTeamId ?? "",
           teamName: teamName(room, room.bonusTeamId),
+          reading: !room.bonusReadingDone,
+          revealedWords: room.currentBonus.question.split(" ").filter(Boolean).slice(0, room.bonusReadIndex),
         }
       : null,
     gameCatChoices: room.state === "GAME_CAT_SELECT" && room.trio

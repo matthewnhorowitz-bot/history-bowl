@@ -5,7 +5,7 @@ import {
   WordRevealedPayload, PlayerJoinedPayload, PlayerLeftPayload, HostChangedPayload,
   BuzzWindowPayload, ErrorPayload, TeamsUpdatedPayload,
   QuarterStartedPayload, GameQuestionStartPayload, GameBuzzPayload, GameAnswerResultPayload,
-  BonusQuestionPayload, GameQuestionEndPayload, GameCatChoicesPayload, GameCatQuestionPayload,
+  BonusQuestionPayload, BonusWordPayload, BonusReadyPayload, GameQuestionEndPayload, GameCatChoicesPayload, GameCatQuestionPayload,
   GameCatRevealPayload, GameEndPayload,
 } from "@shared/types";
 import * as E from "@shared/events";
@@ -36,6 +36,8 @@ export interface ActualGameHook {
   // Q2 bonus
   bonus: BonusQuestionPayload | null;
   bonusAnswered: boolean;
+  bonusReadingWords: string[];  // words revealed so far while the bonus is read out
+  bonusReadingDone: boolean;    // true once fully read and the answer window is open
   // Q3 categories
   catChoices: GameCatChoicesPayload | null;
   catQuestion: GameCatQuestionPayload | null;
@@ -80,6 +82,8 @@ export function useActualGame(roomCode: string, myId: string, isHostInit: boolea
 
   const [bonus, setBonus] = useState<BonusQuestionPayload | null>(null);
   const [bonusAnswered, setBonusAnswered] = useState(false);
+  const [bonusReadingWords, setBonusReadingWords] = useState<string[]>([]);
+  const [bonusReadingDone, setBonusReadingDone] = useState(false);
 
   const [catChoices, setCatChoices] = useState<GameCatChoicesPayload | null>(null);
   const [catQuestion, setCatQuestion] = useState<GameCatQuestionPayload | null>(null);
@@ -135,7 +139,7 @@ export function useActualGame(roomCode: string, myId: string, isHostInit: boolea
       // Reset per-question UI; the follow-up event sets the concrete state.
       setRevealedWords([]); setIsPastPowerMark(false); setBuzzStatus(null);
       setLastResult(null); setQuestionEnd(null); setLockedTeamIds([]);
-      setBonus(null); setBonusAnswered(false);
+      setBonus(null); setBonusAnswered(false); setBonusReadingWords([]); setBonusReadingDone(false);
       setCatQuestion(null); setCatReveal(null);
       clearAnswerTimer(); clearWindow(); clearCatTimer();
     }
@@ -146,7 +150,7 @@ export function useActualGame(roomCode: string, myId: string, isHostInit: boolea
       setQuestionCount(p.count);
       setRevealedWords([]); setIsPastPowerMark(false); setBuzzStatus(null);
       setLastResult(null); setQuestionEnd(null); setLockedTeamIds([]);
-      setBonus(null); setBonusAnswered(false);
+      setBonus(null); setBonusAnswered(false); setBonusReadingWords([]); setBonusReadingDone(false);
       clearAnswerTimer(); clearWindow();
       setGameState("READING");
     }
@@ -186,13 +190,28 @@ export function useActualGame(roomCode: string, myId: string, isHostInit: boolea
       setBonusAnswered(false);
       setBuzzStatus(null);
       setGameState("GAME_BONUS");
+      const reading = p.reading ?? false;
+      setBonusReadingWords(p.revealedWords ?? []);
+      setBonusReadingDone(!reading);
+      // The answer window only opens once reading is done (S_BONUS_READY);
+      // don't start the countdown while the bonus is still being read out.
+      if (!reading) startAnswerCountdown(p.timerSeconds);
+      else clearAnswerTimer();
+    }
+
+    function onBonusWord(p: BonusWordPayload) {
+      setBonusReadingWords((prev) => [...prev, p.word]);
+    }
+
+    function onBonusReady(p: BonusReadyPayload) {
+      setBonusReadingDone(true);
       startAnswerCountdown(p.timerSeconds);
     }
 
     function onGameQuestionEnd(p: GameQuestionEndPayload) {
       clearAnswerTimer(); clearWindow();
       setBuzzStatus(null);
-      setBonus(null);
+      setBonus(null); setBonusReadingWords([]); setBonusReadingDone(false);
       applyTeams(p.teams);
       setQuestionEnd(p);
       setGameState("BETWEEN");
@@ -238,6 +257,12 @@ export function useActualGame(roomCode: string, myId: string, isHostInit: boolea
       if (s.quarterName != null) setQuarterName(s.quarterName);
       setLockedTeamIds(s.lockedTeamIds ?? []);
       setBonus(s.bonus ?? null);
+      if (s.bonus) {
+        const reading = s.bonus.reading ?? false;
+        setBonusReadingWords(s.bonus.revealedWords ?? []);
+        setBonusReadingDone(!reading);
+        if (!reading) startAnswerCountdown(s.bonus.timerSeconds);
+      }
       setCatChoices(s.gameCatChoices ?? null);
       if (s.gameCatQuestion) setCatQuestion(s.gameCatQuestion);
       setWinnerTeamId(s.winnerTeamId ?? null);
@@ -259,6 +284,8 @@ export function useActualGame(roomCode: string, myId: string, isHostInit: boolea
     socket.on(E.S_GAME_BUZZ, onGameBuzz);
     socket.on(E.S_GAME_ANSWER_RESULT, onGameAnswerResult);
     socket.on(E.S_BONUS_QUESTION, onBonusQuestion);
+    socket.on(E.S_BONUS_WORD, onBonusWord);
+    socket.on(E.S_BONUS_READY, onBonusReady);
     socket.on(E.S_GAME_QUESTION_END, onGameQuestionEnd);
     socket.on(E.S_GAME_CAT_CHOICES, onGameCatChoices);
     socket.on(E.S_GAME_CAT_QUESTION, onGameCatQuestion);
@@ -281,6 +308,8 @@ export function useActualGame(roomCode: string, myId: string, isHostInit: boolea
       socket.off(E.S_GAME_BUZZ, onGameBuzz);
       socket.off(E.S_GAME_ANSWER_RESULT, onGameAnswerResult);
       socket.off(E.S_BONUS_QUESTION, onBonusQuestion);
+      socket.off(E.S_BONUS_WORD, onBonusWord);
+      socket.off(E.S_BONUS_READY, onBonusReady);
       socket.off(E.S_GAME_QUESTION_END, onGameQuestionEnd);
       socket.off(E.S_GAME_CAT_CHOICES, onGameCatChoices);
       socket.off(E.S_GAME_CAT_QUESTION, onGameCatQuestion);
@@ -327,7 +356,7 @@ export function useActualGame(roomCode: string, myId: string, isHostInit: boolea
     gameState, players, teams, myId, myTeamId, isHost, roomCode, error,
     quarter, quarterName, questionIndex, questionCount,
     revealedWords, isPastPowerMark, buzzStatus, answerTimerRemaining, buzzWindowRemaining, lockedOut, lastResult, questionEnd,
-    bonus, bonusAnswered,
+    bonus, bonusAnswered, bonusReadingWords, bonusReadingDone,
     catChoices, catQuestion, catReveal, catTimerRemaining, catAnswered,
     gameOver: gameState === "GAME_END", winnerTeamId,
     buzz, submitAnswer, nextQuestion, chooseCategories, submitCategoryAnswer, clearError,

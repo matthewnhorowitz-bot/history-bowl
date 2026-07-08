@@ -1,5 +1,6 @@
-import { Question } from "../../../shared/types";
+import { Question, DifficultyFilter } from "../../../shared/types";
 import { QUESTION_POOL_SIZE } from "../../../shared/constants";
+import { filterByDifficulty } from "../../../shared/difficulty";
 import iacQuestions from "./iacQuestions.json";
 
 const ALL: Question[] = (iacQuestions as Question[]).map((q) => ({
@@ -16,17 +17,18 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-// Serve a fresh shuffled pool of real IAC tossups for each game.
-export async function getInitialPool(): Promise<Question[]> {
-  return shuffle(ALL).slice(0, QUESTION_POOL_SIZE);
+// Serve a fresh shuffled pool of real IAC tossups for each game, restricted to
+// packets matching the chosen difficulty (null = any).
+export async function getInitialPool(difficulty: DifficultyFilter = null): Promise<Question[]> {
+  return shuffle(filterByDifficulty(ALL, difficulty)).slice(0, QUESTION_POOL_SIZE);
 }
 
-// When a room's pool runs low, top it up with more shuffled questions,
-// excluding ones already queued.
-export async function maybeRefetch(pool: Question[]): Promise<Question[]> {
+// When a room's pool runs low, top it up with more shuffled questions of the same
+// difficulty, excluding ones already queued.
+export async function maybeRefetch(pool: Question[], difficulty: DifficultyFilter = null): Promise<Question[]> {
   if (pool.length >= 5) return pool;
   const have = new Set(pool.map((q) => q.id));
-  const more = shuffle(ALL.filter((q) => !have.has(q.id))).slice(0, QUESTION_POOL_SIZE);
+  const more = shuffle(filterByDifficulty(ALL, difficulty).filter((q) => !have.has(q.id))).slice(0, QUESTION_POOL_SIZE);
   return [...pool, ...more];
 }
 

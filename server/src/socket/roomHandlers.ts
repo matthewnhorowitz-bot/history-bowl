@@ -69,6 +69,7 @@ export function registerRoomHandlers(io: Server, socket: Socket): void {
       snapshot,
       mode: room.mode,
       teams: getTeams(room),
+      difficulty: room.difficulty,
     });
 
     socket.to(code).emit(E.S_PLAYER_JOINED, { players: getPlayers(room) });

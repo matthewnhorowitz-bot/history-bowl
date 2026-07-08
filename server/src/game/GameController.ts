@@ -37,7 +37,7 @@ export function startNextQuestion(io: Server, room: Room): void {
   room.state = "READING";
 
   // Trigger background refetch if pool is running low
-  maybeRefetch(room.questionPool).then((updated) => {
+  maybeRefetch(room.questionPool, room.difficulty).then((updated) => {
     room.questionPool = updated;
   });
 

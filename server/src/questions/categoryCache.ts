@@ -1,4 +1,5 @@
-import { CategoryTrio } from "../../../shared/types";
+import { CategoryTrio, DifficultyFilter } from "../../../shared/types";
+import { filterByDifficulty } from "../../../shared/difficulty";
 import trios from "./iacCategories.json";
 
 const ALL: CategoryTrio[] = trios as CategoryTrio[];
@@ -12,21 +13,26 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-// A shuffled "deck" so every trio is served once before any repeats, instead of
-// picking uniformly with replacement (which let the same set recur immediately).
-let deck: CategoryTrio[] = [];
-let lastServed: CategoryTrio | null = null;
+// A shuffled "deck" per difficulty so every trio is served once before any repeats
+// (instead of picking with replacement, which let the same set recur immediately).
+interface Deck { cards: CategoryTrio[]; lastServed: CategoryTrio | null; }
+const decks = new Map<string, Deck>();
 
-export function getRandomTrio(): CategoryTrio {
-  if (deck.length === 0) {
-    deck = shuffle(ALL);
+export function getRandomTrio(difficulty: DifficultyFilter = null): CategoryTrio {
+  const key = difficulty ?? "ANY";
+  let deck = decks.get(key);
+  if (!deck) { deck = { cards: [], lastServed: null }; decks.set(key, deck); }
+
+  if (deck.cards.length === 0) {
+    deck.cards = shuffle(filterByDifficulty(ALL, difficulty));
     // Seam guard: don't repeat the trio we just served across the reshuffle.
-    if (deck.length > 1 && deck[deck.length - 1] === lastServed) {
-      [deck[deck.length - 1], deck[0]] = [deck[0], deck[deck.length - 1]];
+    if (deck.cards.length > 1 && deck.cards[deck.cards.length - 1] === deck.lastServed) {
+      const last = deck.cards.length - 1;
+      [deck.cards[last], deck.cards[0]] = [deck.cards[0], deck.cards[last]];
     }
   }
-  const trio = deck.pop()!;
-  lastServed = trio;
+  const trio = deck.cards.pop()!;
+  deck.lastServed = trio;
   return trio;
 }
 

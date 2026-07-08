@@ -1,18 +1,19 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useSocket } from "../context/SocketContext";
-import { Player, RoomMode, Team, PlayerJoinedPayload, PlayerLeftPayload, GameStartedPayload, HostChangedPayload, ModeChangedPayload, CategoryChoicesPayload, TeamsUpdatedPayload, QuarterStartedPayload } from "@shared/types";
+import { Player, RoomMode, Team, DifficultyFilter, PlayerJoinedPayload, PlayerLeftPayload, GameStartedPayload, HostChangedPayload, ModeChangedPayload, DifficultyChangedPayload, CategoryChoicesPayload, TeamsUpdatedPayload, QuarterStartedPayload } from "@shared/types";
 import * as E from "@shared/events";
 
 export default function LobbyPage() {
   const { roomCode } = useParams<{ roomCode: string }>();
-  const { state } = useLocation() as { state: { myId: string; isHost: boolean; players: Player[]; mode?: RoomMode; teams?: Team[] } };
+  const { state } = useLocation() as { state: { myId: string; isHost: boolean; players: Player[]; mode?: RoomMode; teams?: Team[]; difficulty?: DifficultyFilter } };
   const socket = useSocket();
   const navigate = useNavigate();
 
   const [players, setPlayers] = useState<Player[]>(state?.players ?? []);
   const [isHost, setIsHost] = useState(state?.isHost ?? false);
   const [mode, setMode] = useState<RoomMode>(state?.mode ?? "TOSSUP");
+  const [difficulty, setDifficulty] = useState<DifficultyFilter>(state?.difficulty ?? null);
   const [teams, setTeams] = useState<Team[]>(state?.teams ?? []);
   const [newTeamName, setNewTeamName] = useState("");
   const myId = state?.myId ?? socket.id;
@@ -42,6 +43,7 @@ export default function LobbyPage() {
     }
 
     function onModeChanged({ mode: m }: ModeChangedPayload) { setMode(m); }
+    function onDifficultyChanged({ difficulty: d }: DifficultyChangedPayload) { setDifficulty(d); }
     function onTeamsUpdated({ teams: t }: TeamsUpdatedPayload) { setTeams(t); }
 
     function onCategoryChoices(_: CategoryChoicesPayload) {
@@ -69,6 +71,7 @@ export default function LobbyPage() {
     socket.on(E.S_HOST_CHANGED, onHostChanged);
     socket.on(E.S_GAME_STARTED, onGameStarted);
     socket.on(E.S_MODE_CHANGED, onModeChanged);
+    socket.on(E.S_DIFFICULTY_CHANGED, onDifficultyChanged);
     socket.on(E.S_CATEGORY_CHOICES, onCategoryChoices);
     socket.on(E.S_QUARTER_STARTED, onQuarterStarted);
     socket.on(E.S_TEAMS_UPDATED, onTeamsUpdated);
@@ -79,6 +82,7 @@ export default function LobbyPage() {
       socket.off(E.S_HOST_CHANGED, onHostChanged);
       socket.off(E.S_GAME_STARTED, onGameStarted);
       socket.off(E.S_MODE_CHANGED, onModeChanged);
+      socket.off(E.S_DIFFICULTY_CHANGED, onDifficultyChanged);
       socket.off(E.S_CATEGORY_CHOICES, onCategoryChoices);
       socket.off(E.S_QUARTER_STARTED, onQuarterStarted);
       socket.off(E.S_TEAMS_UPDATED, onTeamsUpdated);
@@ -91,6 +95,10 @@ export default function LobbyPage() {
 
   function changeMode(m: RoomMode) {
     socket.emit(E.C_SET_MODE, { roomCode, mode: m });
+  }
+
+  function changeDifficulty(d: DifficultyFilter) {
+    socket.emit(E.C_SET_DIFFICULTY, { roomCode, difficulty: d });
   }
 
   function createTeam() {
@@ -157,6 +165,43 @@ export default function LobbyPage() {
               ? "Host picks 2 of 3 categories; answer 16 questions (10s, +10 each). Make teams below to play as teams."
               : "Full four-quarter match. Play solo, or form up to two teams below, then start."}
             {!isHost && " Only the host can change the mode."}
+          </p>
+        </div>
+
+        {/* Difficulty — chooses which packets questions are pulled from */}
+        <div className="card" style={{ marginBottom: 20 }}>
+          <h2 style={{ fontSize: "0.85rem", color: "var(--text-dim)", marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            Difficulty
+          </h2>
+          <div style={{ display: "flex", gap: 10 }}>
+            {([
+              [null, "Any"],
+              ["EASY", "Easy"],
+              ["MEDIUM", "Medium"],
+              ["HARD", "Hard"],
+            ] as [DifficultyFilter, string][]).map(([value, label]) => {
+              const active = difficulty === value;
+              return (
+                <button
+                  key={label}
+                  disabled={!isHost}
+                  onClick={() => changeDifficulty(value)}
+                  style={{
+                    flex: 1, padding: "10px 8px", fontSize: "0.82rem", fontWeight: 600,
+                    borderRadius: "var(--radius)", cursor: isHost ? "pointer" : "default",
+                    border: `2px solid ${active ? "var(--accent)" : "var(--border)"}`,
+                    background: active ? "var(--accent-dim)" : "var(--bg-card)",
+                    color: active ? "var(--accent)" : "var(--text-dim)",
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+          <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", marginTop: 10 }}>
+            Sets which packets questions come from: Easy = regional rounds, Medium = Nationals rounds 1–5, Hard = Nationals round 6+ and playoffs. Any mixes them all.
+            {!isHost && " Only the host can change the difficulty."}
           </p>
         </div>
 

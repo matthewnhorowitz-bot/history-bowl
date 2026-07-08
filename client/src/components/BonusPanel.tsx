@@ -7,10 +7,12 @@ interface Props {
   myTeamId: string | null;
   answered: boolean;
   timerRemaining: number;
+  readingWords: string[];  // words revealed so far while the bonus is read out
+  readingDone: boolean;    // true once fully read and the answer window is open
   onSubmit: (answer: string) => void;
 }
 
-export default function BonusPanel({ bonus, myTeamId, answered, timerRemaining, onSubmit }: Props) {
+export default function BonusPanel({ bonus, myTeamId, answered, timerRemaining, readingWords, readingDone, onSubmit }: Props) {
   const mine = myTeamId === bonus.teamId;
 
   return (
@@ -23,10 +25,20 @@ export default function BonusPanel({ bonus, myTeamId, answered, timerRemaining, 
       </div>
 
       <div className="card" style={{ padding: 24, marginBottom: 16, fontSize: "1.1rem", lineHeight: 1.6 }}>
-        {bonus.text}
+        {readingDone
+          ? bonus.text
+          : readingWords.length > 0
+          ? <>{readingWords.join(" ")}<span style={{ color: "var(--text-muted)" }}> …</span></>
+          : <span style={{ color: "var(--text-muted)", fontSize: "0.9rem" }}>Reading the bonus question…</span>}
       </div>
 
-      {mine ? (
+      {!readingDone ? (
+        <p style={{ textAlign: "center", color: "var(--text-dim)", padding: 12 }}>
+          {mine
+            ? <>Listen up — get ready to answer once the bonus finishes reading…</>
+            : <><strong style={{ color: "var(--text)" }}>{bonus.teamName}</strong>'s bonus is being read…</>}
+        </p>
+      ) : mine ? (
         answered ? (
           <p style={{ textAlign: "center", color: "var(--text-dim)", padding: 12 }}>
             Answer locked in — waiting for the result…

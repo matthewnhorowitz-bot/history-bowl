@@ -107,6 +107,8 @@ export default function ActualGamePage({ roomCode, myId, isHost, players, snapsh
             myTeamId={game.myTeamId}
             answered={game.bonusAnswered}
             timerRemaining={game.answerTimerRemaining}
+            readingWords={game.bonusReadingWords}
+            readingDone={game.bonusReadingDone}
             onSubmit={game.submitAnswer}
           />
         )}

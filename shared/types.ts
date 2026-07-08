@@ -6,6 +6,9 @@ export type GameState =
 
 export type RoomMode = "TOSSUP" | "CATEGORY" | "GAME";
 
+import type { Difficulty, DifficultyFilter } from "./difficulty";
+export type { Difficulty, DifficultyFilter };
+
 // Third Quarter category data (bundled)
 export interface CategoryQA {
   clue: string;
@@ -118,6 +121,7 @@ export interface SyncPayload {
   teams: Team[];
   teamPlay: boolean;
   myTeamId: string | null;
+  difficulty: DifficultyFilter; // packet difficulty filter chosen in the lobby (null = any)
   // "Actual Game" (four-quarter) mode — null/absent in the other modes.
   quarter: number | null;          // 1..4, or null when not in a game
   quarterName: string | null;
@@ -131,6 +135,9 @@ export interface SyncPayload {
 // ---- Category (Third Quarter) payloads ----
 export interface ModeChangedPayload {
   mode: RoomMode;
+}
+export interface DifficultyChangedPayload {
+  difficulty: DifficultyFilter; // null = any (no packet filtering)
 }
 export interface CategoryChoicesPayload {
   titles: string[]; // the 3 category titles
@@ -171,6 +178,7 @@ export interface RoomJoinedPayload {
   snapshot?: GameSnapshot;
   mode?: RoomMode;
   teams?: Team[];
+  difficulty?: DifficultyFilter;
 }
 
 export interface PlayerJoinedPayload {
@@ -279,6 +287,17 @@ export interface BonusQuestionPayload {
   timerSeconds: number;
   teamId: string;         // only this team may answer
   teamName: string;
+  reading?: boolean;      // true while the bonus is still being read out (input locked)
+  revealedWords?: string[]; // words read so far (used to hydrate a late joiner mid-read)
+}
+
+// The Q2 bonus is read out one word at a time before the answer window opens.
+export interface BonusWordPayload {
+  word: string;
+  wordIndex: number;
+}
+export interface BonusReadyPayload {
+  timerSeconds: number;   // answer window that just started, now that reading is done
 }
 
 export interface GameQuestionEndPayload {

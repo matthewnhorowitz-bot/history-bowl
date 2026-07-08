@@ -1,4 +1,4 @@
-import { GameState, Player, Question, RoomMode, CategoryTrio, CategoryQA, Team, Q2Pair } from "../../shared/types";
+import { GameState, Player, Question, RoomMode, CategoryTrio, CategoryQA, Team, Q2Pair, DifficultyFilter } from "../../shared/types";
 
 export interface TeamState {
   id: string;
@@ -13,6 +13,7 @@ export interface Room {
   players: Map<string, Player>;
   state: GameState;
   mode: RoomMode;
+  difficulty: DifficultyFilter; // packet difficulty filter chosen in the lobby (null = any)
   currentQuestion: Question | null;
   wordsRevealed: number;
   powerMarkIndex: number;
@@ -44,6 +45,8 @@ export interface Room {
   bonusTeamId: string | null;   // Q2 bonus is offered only to this team
   bonusQuestion: Question | null;
   bonusAnswered: boolean;
+  bonusReadIndex: number;       // Q2 bonus: how many words have been read out so far
+  bonusReadingDone: boolean;    // Q2 bonus: true once fully read and the answer window is open
   q2Pool: Q2Pair[];             // Second Quarter tossup+bonus pairs for this game
   currentBonus: { question: string; answer: string } | null; // real bonus for the current Q2 question
   catOwnerTeamId: string | null; // Q3: team the current question is directed at
@@ -67,6 +70,7 @@ export function createRoom(code: string, hostSocketId: string, hostName: string)
     players: new Map([[hostSocketId, host]]),
     state: "LOBBY",
     mode: "TOSSUP",
+    difficulty: null,
     currentQuestion: null,
     wordsRevealed: 0,
     powerMarkIndex: 0,
@@ -95,6 +99,8 @@ export function createRoom(code: string, hostSocketId: string, hostName: string)
     bonusTeamId: null,
     bonusQuestion: null,
     bonusAnswered: false,
+    bonusReadIndex: 0,
+    bonusReadingDone: false,
     q2Pool: [],
     currentBonus: null,
     catOwnerTeamId: null,

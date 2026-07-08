@@ -8,7 +8,7 @@ import {
   startActualGame, advanceGame, chooseGameCategories, submitGameCatAnswer, syncActualGame,
 } from "../game/ActualGameController";
 import { getInitialPool } from "../questions/questionCache";
-import { RoomMode } from "../../../shared/types";
+import { RoomMode, DifficultyFilter } from "../../../shared/types";
 import * as E from "../../../shared/events";
 
 export function registerGameHandlers(io: Server, socket: Socket): void {
@@ -19,6 +19,15 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
     if (mode !== "TOSSUP" && mode !== "CATEGORY" && mode !== "GAME") return;
     room.mode = mode;
     io.to(room.code).emit(E.S_MODE_CHANGED, { mode });
+  });
+
+  // Host picks the packet difficulty in the lobby (null = any).
+  socket.on(E.C_SET_DIFFICULTY, ({ roomCode, difficulty }: { roomCode: string; difficulty: DifficultyFilter }) => {
+    const room = rooms.get(roomCode);
+    if (!room || room.hostSocketId !== socket.id || room.state !== "LOBBY") return;
+    if (difficulty !== null && difficulty !== "EASY" && difficulty !== "MEDIUM" && difficulty !== "HARD") return;
+    room.difficulty = difficulty;
+    io.to(room.code).emit(E.S_DIFFICULTY_CHANGED, { difficulty });
   });
 
   socket.on(E.C_START_GAME, async ({ roomCode }: { roomCode: string }) => {
@@ -59,7 +68,7 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
     }
 
     try {
-      room.questionPool = await getInitialPool();
+      room.questionPool = await getInitialPool(room.difficulty);
     } catch {
       socket.emit(E.S_ERROR, { message: "Failed to load questions", code: "QUESTION_LOAD_FAIL" });
       return;
@@ -105,6 +114,7 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
       teams: getTeams(room),
       teamPlay: room.teamPlay,
       myTeamId: room.players.get(socket.id)?.teamId ?? null,
+      difficulty: room.difficulty,
       ...syncActualGame(room),
     });
   });
