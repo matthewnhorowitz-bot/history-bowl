@@ -1,12 +1,17 @@
 import { Question, DifficultyFilter } from "../../../shared/types";
 import { QUESTION_POOL_SIZE } from "../../../shared/constants";
 import { filterByDifficulty } from "../../../shared/difficulty";
+import { isReadable } from "./dataQuality";
 import iacQuestions from "./iacQuestions.json";
 
-const ALL: Question[] = (iacQuestions as Question[]).map((q) => ({
-  ...q,
-  words: q.questionText.split(" ").filter(Boolean),
-}));
+// Skip any tossup whose text lost its spaces during parsing (none today, but
+// this guards against future/edge malformed data — see dataQuality.ts).
+const ALL: Question[] = (iacQuestions as Question[])
+  .filter((q) => isReadable(q.questionText))
+  .map((q) => ({
+    ...q,
+    words: q.questionText.split(" ").filter(Boolean),
+  }));
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];

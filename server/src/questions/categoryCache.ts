@@ -1,8 +1,13 @@
 import { CategoryTrio, DifficultyFilter } from "../../../shared/types";
 import { filterByDifficulty } from "../../../shared/difficulty";
+import { isReadable } from "./dataQuality";
 import trios from "./iacCategories.json";
 
-const ALL: CategoryTrio[] = trios as CategoryTrio[];
+// Skip any trio containing text that lost its spaces during parsing (none today,
+// but this guards against future/edge malformed data — see dataQuality.ts).
+const ALL: CategoryTrio[] = (trios as CategoryTrio[]).filter((t) =>
+  t.categories.every((c) => isReadable(c.intro, ...c.questions.flatMap((q) => [q.clue, q.answer])))
+);
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -13,26 +18,38 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-// A shuffled "deck" per difficulty so every trio is served once before any repeats
-// (instead of picking with replacement, which let the same set recur immediately).
-interface Deck { cards: CategoryTrio[]; lastServed: CategoryTrio | null; }
+// A shuffled "deck" per (channel, difficulty) so every trio is served once before
+// any repeats — instead of picking with replacement, which let the same set recur
+// immediately. Separate channels keep the standalone Category Round and the
+// Actual-Game Third Quarter from consuming each other's sequence.
+interface Deck { cards: CategoryTrio[]; recent: CategoryTrio[]; }
 const decks = new Map<string, Deck>();
 
-export function getRandomTrio(difficulty: DifficultyFilter = null): CategoryTrio {
-  const key = difficulty ?? "ANY";
+// How many recently-served trios to keep away from the top of a fresh shuffle, so
+// a set can't reappear right across the reshuffle seam. Capped below pool size.
+const RECENT_WINDOW = 20;
+
+export function getRandomTrio(difficulty: DifficultyFilter = null, channel = "default"): CategoryTrio {
+  const key = `${channel}|${difficulty ?? "ANY"}`;
   let deck = decks.get(key);
-  if (!deck) { deck = { cards: [], lastServed: null }; decks.set(key, deck); }
+  if (!deck) { deck = { cards: [], recent: [] }; decks.set(key, deck); }
 
   if (deck.cards.length === 0) {
-    deck.cards = shuffle(filterByDifficulty(ALL, difficulty));
-    // Seam guard: don't repeat the trio we just served across the reshuffle.
-    if (deck.cards.length > 1 && deck.cards[deck.cards.length - 1] === deck.lastServed) {
-      const last = deck.cards.length - 1;
-      [deck.cards[last], deck.cards[0]] = [deck.cards[0], deck.cards[last]];
+    const pool = filterByDifficulty(ALL, difficulty);
+    deck.cards = shuffle(pool);
+    // Seam guard: push any recently-served trios toward the front of the deck
+    // (served last, since we pop() from the end) so they aren't served again until
+    // the rest of the window has cycled through. The stable sort preserves the
+    // shuffled order within each group.
+    const window = Math.min(deck.recent.length, Math.max(0, pool.length - 1));
+    if (window > 0) {
+      const avoid = new Set(deck.recent.slice(-window));
+      deck.cards.sort((a, b) => Number(avoid.has(b)) - Number(avoid.has(a)));
     }
   }
   const trio = deck.cards.pop()!;
-  deck.lastServed = trio;
+  deck.recent.push(trio);
+  if (deck.recent.length > RECENT_WINDOW) deck.recent.shift();
   return trio;
 }
 

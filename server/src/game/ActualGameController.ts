@@ -425,7 +425,7 @@ function startQ3(io: Server, room: Room): void {
   clearGameTimers(room);
   room.quarter = 3;
   room.quarterIndex = 0;
-  room.trio = getRandomTrio(room.difficulty);
+  room.trio = getRandomTrio(room.difficulty, "game");
   room.catQuestions = [];
   room.catIndex = 0;
   room.catOpen = false;

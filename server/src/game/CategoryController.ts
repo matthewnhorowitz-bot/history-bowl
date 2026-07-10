@@ -19,7 +19,7 @@ export function startCategoryRound(io: Server, room: Room): void {
   for (const p of room.players.values()) p.score = 0;
   for (const t of room.teams.values()) t.score = 0;
 
-  room.trio = getRandomTrio(room.difficulty);
+  room.trio = getRandomTrio(room.difficulty, "category");
   room.catQuestions = [];
   room.catIndex = 0;
   room.catOpen = false;

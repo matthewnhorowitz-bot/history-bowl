@@ -20,9 +20,9 @@ export default function GameCategory({ q, reveal, timerRemaining, answered, myTe
 
   return (
     <div style={{ maxWidth: 660, margin: "0 auto", paddingTop: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
-        <h2 style={{ color: "var(--accent)", fontSize: "1.2rem" }}>{q.categoryTitle}</h2>
-        <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+        <h2 style={{ color: "var(--accent)", fontSize: "1.2rem", minWidth: 0, overflowWrap: "break-word" }}>{q.categoryTitle}</h2>
+        <span style={{ color: "var(--text-muted)", fontSize: "0.8rem", whiteSpace: "nowrap" }}>
           Category {q.catNumber}/2 · Question {q.indexInCat}/8 · ({q.questionIndex + 1}/{q.total})
         </span>
       </div>

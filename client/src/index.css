@@ -76,6 +76,10 @@ a { color: var(--accent); text-decoration: none; }
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 24px;
+  /* Wrap long/unbroken tokens instead of letting them overflow off the edge. */
+  overflow-wrap: break-word;
+  word-break: break-word;
+  min-width: 0;
 }
 
 .error-toast {

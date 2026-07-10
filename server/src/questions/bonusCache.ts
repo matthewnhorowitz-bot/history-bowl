@@ -1,8 +1,11 @@
 import { Q2Pair, DifficultyFilter } from "../../../shared/types";
 import { filterByDifficulty } from "../../../shared/difficulty";
+import { isReadable } from "./dataQuality";
 import bonuses from "./iacBonuses.json";
 
-const ALL: Q2Pair[] = bonuses as Q2Pair[];
+// Drop pairs whose tossup or bonus text lost its spaces during PDF parsing
+// (~75 of these) so an unreadable question never reaches a player.
+const ALL: Q2Pair[] = (bonuses as Q2Pair[]).filter((p) => isReadable(p.tossup, p.bonus));
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
