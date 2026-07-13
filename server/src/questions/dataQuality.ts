@@ -3,10 +3,11 @@
 // (e.g. "Woodpaintingwhosetitlefigure..."). Entries like that are dropped from
 // the playable pools at load time rather than shown to players.
 //
-// The longest legitimate English words are ~20 characters, so a whitespace-free
-// run longer than this threshold reliably flags lost spaces without touching
-// normal text.
-const MAX_UNBROKEN_RUN = 30;
+// The longest legitimate words/scientific terms run ~30-34 characters (e.g.
+// "dichlorodiphenyltrichloroethane"), while spaces lost in PDF parsing produce
+// much longer runs (40+). A threshold of 35 flags the latter without touching
+// legitimate long terms.
+const MAX_UNBROKEN_RUN = 35;
 
 // True when every provided text is readable (no abnormally long space-less run).
 export function isReadable(...texts: string[]): boolean {
