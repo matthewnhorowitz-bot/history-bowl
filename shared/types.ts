@@ -6,6 +6,9 @@ export type GameState =
 
 export type RoomMode = "TOSSUP" | "CATEGORY" | "GAME";
 
+// Solo AI opponent skill tiers (separate from packet DifficultyFilter).
+export type AiLevel = "easy" | "medium" | "hard" | "robbie";
+
 import type { Difficulty, DifficultyFilter } from "./difficulty";
 export type { Difficulty, DifficultyFilter };
 
@@ -32,6 +35,7 @@ export interface Player {
   score: number;
   isHost: boolean;
   teamId?: string | null;
+  isAi?: boolean; // synthetic server-driven AI opponent (no socket)
 }
 
 // A team in the category round (team play). Score is the team's running total.
@@ -333,9 +337,20 @@ export interface GameCatRevealPayload {
   answer: string;
   correctTeamId: string | null; // team that answered correctly, or null
   teams: Team[];
+  sweepTeamId?: string | null;  // set when the owner swept the whole category
+  sweepBonus?: number;          // bonus points awarded for the sweep
 }
 
 export interface GameEndPayload {
   teams: Team[];
   winnerTeamId: string | null; // null on a tie
+}
+
+// Sent to send everyone back to the lobby for a new game.
+export interface ReturnToLobbyPayload {
+  players: Player[];
+  teams: Team[];
+  mode: RoomMode;
+  difficulty: DifficultyFilter;
+  aiLevel: AiLevel | null;
 }

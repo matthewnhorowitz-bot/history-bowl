@@ -23,6 +23,7 @@ export const Q4_COUNT = 8;             // Fourth Quarter graduated tossups
 export const GAME_CAT_TIMER_S = 10;        // Third Quarter: owner team's answer window
 export const GAME_BOUNCEBACK_TIMER_S = 10; // Third Quarter: bounceback window for the other team
 export const GAME_CAT_REVEAL_MS = 2500;    // pause showing the answer between Q3 questions
+export const CATEGORY_SWEEP_BONUS = 20;    // Third Quarter: bonus for sweeping a whole category
 
 // Fourth Quarter graduated scoring (approximated from a tossup's word positions):
 // bold+underline zone → 30, bold zone → 20, normal text → 10.

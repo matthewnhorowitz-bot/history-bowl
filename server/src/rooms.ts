@@ -1,4 +1,4 @@
-import { GameState, Player, Question, RoomMode, CategoryTrio, CategoryQA, Team, Q2Pair, DifficultyFilter } from "../../shared/types";
+import { GameState, Player, Question, RoomMode, CategoryTrio, CategoryQA, Team, Q2Pair, DifficultyFilter, AiLevel } from "../../shared/types";
 
 export interface TeamState {
   id: string;
@@ -51,8 +51,13 @@ export interface Room {
   currentBonus: { question: string; answer: string } | null; // real bonus for the current Q2 question
   catOwnerTeamId: string | null; // Q3: team the current question is directed at
   catBounce: boolean;            // Q3: true once the question has bounced to the other team
+  catSweepAlive: boolean;        // Q3: true while the owner has answered every question in the current category
   firstPickerTeamId: string | null; // Q3: losing team, which picks the first category
   winnerTeamId: string | null;   // set when the game ends
+  // Solo AI opponent
+  aiLevel: AiLevel | null;       // selected AI opponent tier (null = no AI)
+  aiTeamId: string | null;       // the AI-controlled team, set when a solo-vs-AI game starts
+  aiActionTimer: ReturnType<typeof setTimeout> | null; // dedicated AI buzz/answer timer
 }
 
 export const rooms = new Map<string, Room>();
@@ -105,8 +110,12 @@ export function createRoom(code: string, hostSocketId: string, hostName: string)
     currentBonus: null,
     catOwnerTeamId: null,
     catBounce: false,
+    catSweepAlive: false,
     firstPickerTeamId: null,
     winnerTeamId: null,
+    aiLevel: null,
+    aiTeamId: null,
+    aiActionTimer: null,
   };
   rooms.set(code, room);
   return room;

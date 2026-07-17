@@ -5,10 +5,11 @@ import {
   startCategoryRound, chooseCategories, submitCategoryAnswer, currentCategoryQuestion,
 } from "../game/CategoryController";
 import {
-  startActualGame, advanceGame, chooseGameCategories, submitGameCatAnswer, syncActualGame,
+  startActualGame, advanceGame, chooseGameCategories, submitGameCatAnswer, syncActualGame, clearGameTimers,
+  aiIdFor, aiTeamName,
 } from "../game/ActualGameController";
 import { getInitialPool } from "../questions/questionCache";
-import { RoomMode, DifficultyFilter } from "../../../shared/types";
+import { RoomMode, DifficultyFilter, AiLevel } from "../../../shared/types";
 import * as E from "../../../shared/events";
 
 export function registerGameHandlers(io: Server, socket: Socket): void {
@@ -30,6 +31,15 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
     io.to(room.code).emit(E.S_DIFFICULTY_CHANGED, { difficulty });
   });
 
+  // Host picks the solo AI opponent tier in the lobby (null = no AI).
+  socket.on(E.C_SET_AI, ({ roomCode, aiLevel }: { roomCode: string; aiLevel: AiLevel | null }) => {
+    const room = rooms.get(roomCode);
+    if (!room || room.hostSocketId !== socket.id || room.state !== "LOBBY") return;
+    if (aiLevel !== null && aiLevel !== "easy" && aiLevel !== "medium" && aiLevel !== "hard" && aiLevel !== "robbie") return;
+    room.aiLevel = aiLevel;
+    io.to(room.code).emit(E.S_AI_CHANGED, { aiLevel });
+  });
+
   socket.on(E.C_START_GAME, async ({ roomCode }: { roomCode: string }) => {
     const room = rooms.get(roomCode);
     if (!room) return;
@@ -45,15 +55,34 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
     }
 
     if (room.mode === "GAME") {
+      const wantAi = room.aiLevel !== null;
+
       // Solo/single-team play is allowed. With no teams, auto-create one from
       // every player so a lone host can start with zero setup.
       if (room.teams.size === 0) {
         const id = generateTeamId();
         const memberIds = new Set(room.players.keys());
-        room.teams.set(id, { id, name: "Team 1", score: 0, memberIds });
+        room.teams.set(id, { id, name: wantAi ? "You" : "Team 1", score: 0, memberIds });
         for (const p of room.players.values()) p.teamId = id;
         io.to(room.code).emit(E.S_TEAMS_UPDATED, { teams: getTeams(room) });
       }
+
+      // Add the solo AI opponent as the second team (server-controlled).
+      room.aiTeamId = null;
+      if (wantAi) {
+        if (room.teams.size > 1) {
+          socket.emit(E.S_ERROR, { message: "The AI opponent is for solo play — remove extra teams first", code: "AI_NEEDS_SOLO" });
+          return;
+        }
+        const teamId = generateTeamId();
+        const aiSocketId = aiIdFor(teamId);
+        const name = aiTeamName(room.aiLevel!);
+        room.teams.set(teamId, { id: teamId, name, score: 0, memberIds: new Set([aiSocketId]) });
+        room.players.set(aiSocketId, { id: aiSocketId, name, score: 0, isHost: false, teamId, isAi: true });
+        room.aiTeamId = teamId;
+        io.to(room.code).emit(E.S_TEAMS_UPDATED, { teams: getTeams(room) });
+      }
+
       const teams = Array.from(room.teams.values());
       if (teams.length > 2) {
         socket.emit(E.S_ERROR, { message: "An Actual Game supports at most two teams", code: "TOO_MANY_TEAMS" });
@@ -75,6 +104,51 @@ export function registerGameHandlers(io: Server, socket: Socket): void {
     }
 
     startNextQuestion(io, room);
+  });
+
+  // Host starts a new game from the ending screen → reset and return to lobby.
+  socket.on(E.C_NEW_GAME, ({ roomCode }: { roomCode: string }) => {
+    const room = rooms.get(roomCode);
+    if (!room || room.hostSocketId !== socket.id) return;
+    if (room.state !== "GAME_END") return;
+
+    clearGameTimers(room);
+    room.state = "LOBBY";
+    room.quarter = 0;
+    room.quarterIndex = 0;
+    room.winnerTeamId = null;
+    room.teamPlay = false;
+    room.lockedOutTeams = new Set();
+    room.bonusTeamId = null;
+    room.bonusQuestion = null;
+    room.bonusAnswered = false;
+    room.bonusReadingDone = false;
+    room.currentBonus = null;
+    room.trio = null;
+    room.catQuestions = [];
+    room.catOpen = false;
+    room.catOwnerTeamId = null;
+    room.catBounce = false;
+    room.catSweepAlive = false;
+    room.firstPickerTeamId = null;
+
+    // Tear down the AI opponent (team + synthetic player); a rematch rebuilds it
+    // from room.aiLevel, which we keep so the selection survives the return to lobby.
+    if (room.aiTeamId) {
+      room.players.delete(aiIdFor(room.aiTeamId));
+      room.teams.delete(room.aiTeamId);
+      room.aiTeamId = null;
+    }
+    for (const p of room.players.values()) p.score = 0;
+    for (const t of room.teams.values()) t.score = 0;
+
+    io.to(room.code).emit(E.S_RETURN_TO_LOBBY, {
+      players: getPlayers(room),
+      teams: getTeams(room),
+      mode: room.mode,
+      difficulty: room.difficulty,
+      aiLevel: room.aiLevel,
+    });
   });
 
   socket.on(E.C_CHOOSE_CATEGORIES, ({ roomCode, indices }: { roomCode: string; indices: number[] }) => {

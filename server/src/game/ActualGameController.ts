@@ -1,6 +1,6 @@
 import { Server } from "socket.io";
 import { Room, TeamState, getTeams } from "../rooms";
-import { Question } from "../../../shared/types";
+import { Question, AiLevel } from "../../../shared/types";
 import { judgeAnswer } from "../utils/answerValidator";
 import { getInitialPool, maybeRefetch } from "../questions/questionCache";
 import { getRandomTrio } from "../questions/categoryCache";
@@ -13,6 +13,7 @@ import {
   GAME_BONUS_SCORE,
   GAME_BONUS_TIMER_S,
   CATEGORY_SCORE,
+  CATEGORY_SWEEP_BONUS,
   Q1_COUNT,
   Q2_COUNT,
   Q4_COUNT,
@@ -60,17 +61,113 @@ function otherTeamId(room: Room, teamId: string | null): string | null {
   return null;
 }
 
+// ---------- AI opponent ----------
+
+// The synthetic "socket id" for the AI team's player, derived from its team id.
+export function aiIdFor(teamId: string): string {
+  return `ai:${teamId}`;
+}
+
+export function aiTeamName(level: AiLevel): string {
+  switch (level) {
+    case "easy": return "Rookie Bot";
+    case "medium": return "Junior Bot";
+    case "hard": return "Varsity Bot";
+    case "robbie": return "Robbie from Livingston";
+  }
+}
+
+interface AiParams {
+  pKnow: number;        // chance it knows a given tossup / bonus / category answer
+  slip: number;         // chance a "known" answer still comes out wrong
+  buzzMin: number;      // earliest buzz position as a fraction of the question
+  buzzMax: number;      // latest buzz position as a fraction of the question
+  thinkMin: number;     // ms to "think" before submitting an answer
+  thinkMax: number;
+}
+
+const AI_PARAMS: Record<AiLevel, AiParams> = {
+  easy:   { pKnow: 0.30, slip: 0.20, buzzMin: 0.75, buzzMax: 1.0,  thinkMin: 900, thinkMax: 1600 },
+  medium: { pKnow: 0.50, slip: 0.12, buzzMin: 0.55, buzzMax: 0.85, thinkMin: 800, thinkMax: 1500 },
+  hard:   { pKnow: 0.72, slip: 0.06, buzzMin: 0.40, buzzMax: 0.70, thinkMin: 700, thinkMax: 1300 },
+  robbie: { pKnow: 0.90, slip: 0.02, buzzMin: 0.20, buzzMax: 0.50, thinkMin: 500, thinkMax: 1100 },
+};
+
+function rand(min: number, max: number): number {
+  return min + Math.random() * (max - min);
+}
+
+function aiActive(room: Room): AiParams | null {
+  if (!room.aiLevel || !room.aiTeamId) return null;
+  return AI_PARAMS[room.aiLevel];
+}
+
+function setAiTimer(room: Room, fn: () => void, ms: number): void {
+  if (room.aiActionTimer) clearTimeout(room.aiActionTimer);
+  room.aiActionTimer = setTimeout(() => { room.aiActionTimer = null; fn(); }, ms);
+}
+
+// Schedule the AI's answer after it has buzzed a tossup (or when answering a
+// bonus / category). Submits the exact answer when "correct", else a blank.
+function scheduleAiAnswer(io: Server, room: Room, answerKey: string, know: boolean): void {
+  const p = aiActive(room);
+  if (!p) return;
+  const correct = know && Math.random() >= p.slip;
+  setAiTimer(room, () => {
+    handleGameSubmitAnswer(io, room, aiIdFor(room.aiTeamId!), correct ? answerKey : "");
+  }, rand(p.thinkMin, p.thinkMax));
+}
+
+// (a) Buzz quarters: decide whether/when the AI buzzes the current tossup.
+function scheduleAiBuzz(io: Server, room: Room): void {
+  const p = aiActive(room);
+  if (!p) return;
+  if (room.state !== "READING") return;
+  if (room.lockedOutTeams.has(room.aiTeamId!)) return; // already missed this one
+  if (Math.random() >= p.pKnow) return;                // doesn't know it — stays silent
+
+  const words = room.currentQuestion?.words ?? [];
+  if (words.length === 0) return;
+  const targetWord = Math.min(words.length, Math.max(1, Math.floor(words.length * rand(p.buzzMin, p.buzzMax))));
+  const wordsUntil = Math.max(0, targetWord - room.wordsRevealed);
+  const delay = wordsUntil * WORD_INTERVAL_MS + rand(60, 260);
+
+  setAiTimer(room, () => {
+    if (room.state !== "READING") return;                 // a human beat it to the buzzer
+    if (room.lockedOutTeams.has(room.aiTeamId!)) return;
+    const aiId = aiIdFor(room.aiTeamId!);
+    handleGameBuzz(io, room, aiId);
+    if (room.buzzedBy === aiId) {
+      scheduleAiAnswer(io, room, room.currentQuestion?.answer ?? "", true); // it buzzed because it "knows"
+    }
+  }, delay);
+}
+
+// (d) Q3 category: if the AI is the team on the clock (owner or bounceback),
+// schedule its answer within the window.
+function scheduleAiCatAnswer(io: Server, room: Room, activeTeamId: string | null): void {
+  const p = aiActive(room);
+  if (!p || activeTeamId !== room.aiTeamId) return;
+  const cur = room.catQuestions[room.catIndex];
+  const know = Math.random() < p.pKnow;
+  const correct = know && Math.random() >= p.slip;
+  setAiTimer(room, () => {
+    submitGameCatAnswer(io, room, aiIdFor(room.aiTeamId!), correct ? (cur?.qa.answer ?? "") : "");
+  }, rand(p.thinkMin, p.thinkMax));
+}
+
 function award(room: Room, teamId: string | null, points: number): void {
   if (!teamId) return;
   const t = room.teams.get(teamId);
   if (t) t.score += points;
 }
 
-function clearGameTimers(room: Room): void {
+export function clearGameTimers(room: Room): void {
   if (room.readingTimer) { clearInterval(room.readingTimer); room.readingTimer = null; }
   if (room.answerTimer) { clearTimeout(room.answerTimer); room.answerTimer = null; }
   if (room.endWindowTimer) { clearTimeout(room.endWindowTimer); room.endWindowTimer = null; }
   if (room.catTimer) { clearTimeout(room.catTimer); room.catTimer = null; }
+  if (room.aiActionTimer) { clearTimeout(room.aiActionTimer); room.aiActionTimer = null; }
 }
 
 // Q4 approximation: award 30/20/10 by how early the team buzzed. Thresholds are
@@ -160,6 +257,7 @@ function startBuzzQuestion(io: Server, room: Room): void {
   });
 
   startReadingLoop(io, room);
+  scheduleAiBuzz(io, room);
 }
 
 function startReadingLoop(io: Server, room: Room): void {
@@ -288,6 +386,7 @@ function resolveBuzz(io: Server, room: Room, socketId: string, answer: string, c
     room.state = "READING";
     if (wordsLeft) startReadingLoop(io, room);
     else startEndWindow(io, room);
+    scheduleAiBuzz(io, room); // the AI may still buzz if it isn't the one locked out
   } else {
     endBuzzQuestion(io, room);
   }
@@ -359,6 +458,12 @@ function finishBonusReading(io: Server, room: Room): void {
   room.bonusReadingDone = true;
   io.to(room.code).emit(E.S_BONUS_READY, { timerSeconds: GAME_BONUS_TIMER_S });
   room.answerTimer = setTimeout(() => finishBonus(io, room, false, ""), GAME_BONUS_TIMER_S * 1000);
+
+  // (c) If the AI won the tossup, it answers its own bonus.
+  const p = aiActive(room);
+  if (p && room.bonusTeamId === room.aiTeamId) {
+    scheduleAiAnswer(io, room, room.currentBonus?.answer ?? "", Math.random() < p.pKnow);
+  }
 }
 
 function handleBonusAnswer(io: Server, room: Room, socketId: string, answer: string): void {
@@ -497,9 +602,12 @@ function askGameCatQuestion(io: Server, room: Room): void {
   room.catAnswered = new Set();
   room.catCorrect = new Set();
   room.catOpen = true;
+  // A fresh category begins — the owner's sweep is alive until they miss one.
+  if (cur.indexInCat === 1) room.catSweepAlive = true;
 
   emitCatQuestion(io, room, cur.ownerTeamId ?? null, false, GAME_CAT_TIMER_S);
   room.catTimer = setTimeout(() => failCurrentCat(io, room), GAME_CAT_TIMER_S * 1000);
+  scheduleAiCatAnswer(io, room, cur.ownerTeamId ?? null);
 }
 
 function emitCatQuestion(io: Server, room: Room, activeTeamId: string | null, bounce: boolean, seconds: number): void {
@@ -543,6 +651,8 @@ export function submitGameCatAnswer(io: Server, room: Room, socketId: string, an
 // The team currently on the clock failed (wrong answer or timeout).
 function failCurrentCat(io: Server, room: Room): void {
   if (!room.catOpen) return; // already resolved/revealed
+  // The owner just missed (wrong answer or timeout) — no clean sweep possible.
+  if (!room.catBounce) room.catSweepAlive = false;
   const other = otherTeamId(room, room.catOwnerTeamId);
   if (!room.catBounce && other) {
     // Bounce to the other team.
@@ -550,6 +660,7 @@ function failCurrentCat(io: Server, room: Room): void {
     if (room.catTimer) { clearTimeout(room.catTimer); room.catTimer = null; }
     emitCatQuestion(io, room, other, true, GAME_BOUNCEBACK_TIMER_S);
     room.catTimer = setTimeout(() => failCurrentCat(io, room), GAME_BOUNCEBACK_TIMER_S * 1000);
+    scheduleAiCatAnswer(io, room, other);
   } else {
     revealGameCat(io, room, null);
   }
@@ -561,11 +672,25 @@ function revealGameCat(io: Server, room: Room, correctTeamId: string | null): vo
   if (room.catTimer) { clearTimeout(room.catTimer); room.catTimer = null; }
 
   const cur = room.catQuestions[room.catIndex];
+
+  // Category-sweep bonus: if this is the last question of the category and the
+  // owner answered every one of them correctly, award +20. Detect "last in
+  // category" by the next entry being absent or belonging to a different category.
+  const next = room.catQuestions[room.catIndex + 1];
+  const lastInCat = !next || next.catNumber !== cur.catNumber;
+  let sweepTeamId: string | null = null;
+  if (lastInCat && room.catSweepAlive && cur.ownerTeamId) {
+    sweepTeamId = cur.ownerTeamId;
+    award(room, sweepTeamId, CATEGORY_SWEEP_BONUS);
+  }
+
   io.to(room.code).emit(E.S_GAME_CAT_REVEAL, {
     questionIndex: room.catIndex,
     answer: cur.qa.answer,
     correctTeamId,
     teams: getTeams(room),
+    sweepTeamId,
+    sweepBonus: sweepTeamId ? CATEGORY_SWEEP_BONUS : undefined,
   });
 
   room.catTimer = setTimeout(() => {

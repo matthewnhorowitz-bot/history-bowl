@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useSocket } from "../context/SocketContext";
-import { Player, RoomMode, Team, DifficultyFilter, PlayerJoinedPayload, PlayerLeftPayload, GameStartedPayload, HostChangedPayload, ModeChangedPayload, DifficultyChangedPayload, CategoryChoicesPayload, TeamsUpdatedPayload, QuarterStartedPayload } from "@shared/types";
+import { Player, RoomMode, Team, DifficultyFilter, AiLevel, PlayerJoinedPayload, PlayerLeftPayload, GameStartedPayload, HostChangedPayload, ModeChangedPayload, DifficultyChangedPayload, CategoryChoicesPayload, TeamsUpdatedPayload, QuarterStartedPayload } from "@shared/types";
 import * as E from "@shared/events";
 
 export default function LobbyPage() {
   const { roomCode } = useParams<{ roomCode: string }>();
-  const { state } = useLocation() as { state: { myId: string; isHost: boolean; players: Player[]; mode?: RoomMode; teams?: Team[]; difficulty?: DifficultyFilter } };
+  const { state } = useLocation() as { state: { myId: string; isHost: boolean; players: Player[]; mode?: RoomMode; teams?: Team[]; difficulty?: DifficultyFilter; aiLevel?: AiLevel | null } };
   const socket = useSocket();
   const navigate = useNavigate();
 
@@ -14,6 +14,7 @@ export default function LobbyPage() {
   const [isHost, setIsHost] = useState(state?.isHost ?? false);
   const [mode, setMode] = useState<RoomMode>(state?.mode ?? "TOSSUP");
   const [difficulty, setDifficulty] = useState<DifficultyFilter>(state?.difficulty ?? null);
+  const [aiLevel, setAiLevel] = useState<AiLevel | null>(state?.aiLevel ?? null);
   const [teams, setTeams] = useState<Team[]>(state?.teams ?? []);
   const [newTeamName, setNewTeamName] = useState("");
   const myId = state?.myId ?? socket.id;
@@ -44,6 +45,7 @@ export default function LobbyPage() {
 
     function onModeChanged({ mode: m }: ModeChangedPayload) { setMode(m); }
     function onDifficultyChanged({ difficulty: d }: DifficultyChangedPayload) { setDifficulty(d); }
+    function onAiChanged({ aiLevel: a }: { aiLevel: AiLevel | null }) { setAiLevel(a); }
     function onTeamsUpdated({ teams: t }: TeamsUpdatedPayload) { setTeams(t); }
 
     function onCategoryChoices(_: CategoryChoicesPayload) {
@@ -72,6 +74,7 @@ export default function LobbyPage() {
     socket.on(E.S_GAME_STARTED, onGameStarted);
     socket.on(E.S_MODE_CHANGED, onModeChanged);
     socket.on(E.S_DIFFICULTY_CHANGED, onDifficultyChanged);
+    socket.on(E.S_AI_CHANGED, onAiChanged);
     socket.on(E.S_CATEGORY_CHOICES, onCategoryChoices);
     socket.on(E.S_QUARTER_STARTED, onQuarterStarted);
     socket.on(E.S_TEAMS_UPDATED, onTeamsUpdated);
@@ -83,6 +86,7 @@ export default function LobbyPage() {
       socket.off(E.S_GAME_STARTED, onGameStarted);
       socket.off(E.S_MODE_CHANGED, onModeChanged);
       socket.off(E.S_DIFFICULTY_CHANGED, onDifficultyChanged);
+      socket.off(E.S_AI_CHANGED, onAiChanged);
       socket.off(E.S_CATEGORY_CHOICES, onCategoryChoices);
       socket.off(E.S_QUARTER_STARTED, onQuarterStarted);
       socket.off(E.S_TEAMS_UPDATED, onTeamsUpdated);
@@ -99,6 +103,10 @@ export default function LobbyPage() {
 
   function changeDifficulty(d: DifficultyFilter) {
     socket.emit(E.C_SET_DIFFICULTY, { roomCode, difficulty: d });
+  }
+
+  function changeAi(level: AiLevel | null) {
+    socket.emit(E.C_SET_AI, { roomCode, aiLevel: level });
   }
 
   function createTeam() {
@@ -204,6 +212,46 @@ export default function LobbyPage() {
             {!isHost && " Only the host can change the difficulty."}
           </p>
         </div>
+
+        {/* AI opponent — solo play vs. a server-controlled bot (GAME mode only) */}
+        {mode === "GAME" && (
+          <div className="card" style={{ marginBottom: 20 }}>
+            <h2 style={{ fontSize: "0.85rem", color: "var(--text-dim)", marginBottom: 12, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+              AI Opponent
+            </h2>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {([
+                [null, "None"],
+                ["easy", "Rookie Bot"],
+                ["medium", "Junior Bot"],
+                ["hard", "Varsity Bot"],
+                ["robbie", "Robbie from Livingston"],
+              ] as [AiLevel | null, string][]).map(([value, label]) => {
+                const active = aiLevel === value;
+                return (
+                  <button
+                    key={label}
+                    disabled={!isHost}
+                    onClick={() => changeAi(value)}
+                    style={{
+                      flex: "1 1 120px", padding: "10px 8px", fontSize: "0.82rem", fontWeight: 600,
+                      borderRadius: "var(--radius)", cursor: isHost ? "pointer" : "default",
+                      border: `2px solid ${active ? "var(--accent)" : "var(--border)"}`,
+                      background: active ? "var(--accent-dim)" : "var(--bg-card)",
+                      color: active ? "var(--accent)" : "var(--text-dim)",
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", marginTop: 10 }}>
+              Play solo against a computer opponent that buzzes and answers on its own. Higher tiers buzz earlier and miss less — Robbie from Livingston is the toughest. This is separate from the packet difficulty above.
+              {!isHost && " Only the host can change the AI opponent."}
+            </p>
+          </div>
+        )}
 
         {/* Teams (category round & actual game) */}
         {(mode === "CATEGORY" || mode === "GAME") && (

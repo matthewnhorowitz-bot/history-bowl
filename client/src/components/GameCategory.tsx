@@ -55,6 +55,11 @@ export default function GameCategory({ q, reveal, timerRemaining, answered, myTe
           </span>
           {" — "}
           <span style={{ color: "var(--text)" }}>{reveal!.answer}</span>
+          {reveal!.sweepTeamId && (
+            <div style={{ marginTop: 10, fontWeight: 700, color: "var(--power)" }}>
+              🏆 {reveal!.sweepTeamId === myTeamId ? "Your team" : teamName(reveal!.sweepTeamId)} swept the category! +{reveal!.sweepBonus ?? 20}
+            </div>
+          )}
         </div>
       ) : canAnswer ? (
         <div className="card" style={{ borderColor: q.bounce ? "#e08555" : "var(--accent)" }}>

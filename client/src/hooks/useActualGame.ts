@@ -341,6 +341,10 @@ export function useActualGame(roomCode: string, myId: string, isHostInit: boolea
     socket.emit(E.C_NEXT_QUESTION, { roomCode });
   }, [socket, roomCode]);
 
+  const newGame = useCallback(() => {
+    socket.emit(E.C_NEW_GAME, { roomCode });
+  }, [socket, roomCode]);
+
   const chooseCategories = useCallback((indices: number[]) => {
     socket.emit(E.C_CHOOSE_CATEGORIES, { roomCode, indices });
   }, [socket, roomCode]);
@@ -359,6 +363,6 @@ export function useActualGame(roomCode: string, myId: string, isHostInit: boolea
     bonus, bonusAnswered, bonusReadingWords, bonusReadingDone,
     catChoices, catQuestion, catReveal, catTimerRemaining, catAnswered,
     gameOver: gameState === "GAME_END", winnerTeamId,
-    buzz, submitAnswer, nextQuestion, chooseCategories, submitCategoryAnswer, clearError,
+    buzz, submitAnswer, nextQuestion, newGame, chooseCategories, submitCategoryAnswer, clearError,
   };
 }

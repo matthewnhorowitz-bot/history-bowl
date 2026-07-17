@@ -1,4 +1,8 @@
-import { Player, GameSnapshot } from "@shared/types";
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Player, GameSnapshot, ReturnToLobbyPayload } from "@shared/types";
+import * as E from "@shared/events";
+import { useSocket } from "../context/SocketContext";
 import { useActualGame } from "../hooks/useActualGame";
 import { useKeyboard } from "../hooks/useKeyboard";
 import QuestionDisplay from "../components/QuestionDisplay";
@@ -19,6 +23,22 @@ interface Props {
 
 export default function ActualGamePage({ roomCode, myId, isHost, players, snapshot }: Props) {
   const game = useActualGame(roomCode, myId, isHost, players, snapshot);
+  const socket = useSocket();
+  const navigate = useNavigate();
+
+  // A new game was started from the ending screen — everyone returns to the lobby.
+  useEffect(() => {
+    function onReturnToLobby(p: ReturnToLobbyPayload) {
+      navigate(`/lobby/${roomCode}`, {
+        state: {
+          myId, isHost: game.isHost,
+          players: p.players, teams: p.teams, mode: p.mode, difficulty: p.difficulty, aiLevel: p.aiLevel,
+        },
+      });
+    }
+    socket.on(E.S_RETURN_TO_LOBBY, onReturnToLobby);
+    return () => { socket.off(E.S_RETURN_TO_LOBBY, onReturnToLobby); };
+  }, [socket, navigate, roomCode, myId, game.isHost]);
 
   const isBuzzQuarter = game.quarter === 1 || game.quarter === 2 || game.quarter === 4;
   const buzzing = isBuzzQuarter && (game.gameState === "READING" || game.gameState === "ANSWER_PHASE");
@@ -73,7 +93,14 @@ export default function ActualGamePage({ roomCode, myId, isHost, players, snapsh
                 ? <>Winner: <strong style={{ color: "var(--power)" }}>{teamName(game.winnerTeamId)}</strong></>
                 : "It's a tie!"}
             </p>
-            <p style={{ color: "var(--text-dim)", fontSize: "0.9rem" }}>Final standings are on the right.</p>
+            <p style={{ color: "var(--text-dim)", fontSize: "0.9rem", marginBottom: game.isHost ? 20 : 0 }}>Final standings are on the right.</p>
+            {game.isHost ? (
+              <button className="btn-primary" onClick={game.newGame} style={{ padding: "12px 24px" }}>
+                New Game →
+              </button>
+            ) : (
+              <p style={{ color: "var(--text-dim)", fontSize: "0.85rem", marginTop: 8 }}>Waiting for the host to start a new game…</p>
+            )}
           </div>
         )}
 

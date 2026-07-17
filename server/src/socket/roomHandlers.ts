@@ -95,26 +95,32 @@ export function handlePlayerLeave(io: Server, socket: Socket, roomCode: string):
   room.players.delete(socket.id);
   socket.leave(roomCode);
 
-  if (room.players.size === 0) {
-    // Clean up empty room after delay
+  const humanCount = (r: typeof room) => Array.from(r.players.values()).filter((p) => !p.isAi).length;
+
+  if (humanCount(room) === 0) {
+    // Clean up empty room after delay (the AI player, if any, doesn't keep it alive)
     if (room.cleanupTimer) clearTimeout(room.cleanupTimer);
     room.cleanupTimer = setTimeout(() => {
-      if (rooms.get(roomCode)?.players.size === 0) {
+      const r = rooms.get(roomCode);
+      if (r && humanCount(r) === 0) {
         if (room.readingTimer) clearInterval(room.readingTimer);
         if (room.answerTimer) clearTimeout(room.answerTimer);
         if (room.catTimer) clearTimeout(room.catTimer);
+        if (room.aiActionTimer) clearTimeout(room.aiActionTimer);
         rooms.delete(roomCode);
       }
     }, 60_000);
     return;
   }
 
-  // Migrate host if needed
+  // Migrate host if needed (never to the synthetic AI player)
   if (room.hostSocketId === socket.id) {
-    const next = Array.from(room.players.values())[0];
-    next.isHost = true;
-    room.hostSocketId = next.id;
-    io.to(roomCode).emit(E.S_HOST_CHANGED, { newHostId: next.id });
+    const next = Array.from(room.players.values()).find((p) => !p.isAi);
+    if (next) {
+      next.isHost = true;
+      room.hostSocketId = next.id;
+      io.to(roomCode).emit(E.S_HOST_CHANGED, { newHostId: next.id });
+    }
   }
 
   io.to(roomCode).emit(E.S_PLAYER_LEFT, { players: getPlayers(room) });

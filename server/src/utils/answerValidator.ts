@@ -17,6 +17,11 @@ const STOPWORDS = new Set([
 function normalize(s: string): string {
   return s
     .toLowerCase()
+    // Decompose accented letters and drop the combining marks so "Napoléon"
+    // normalizes to "napoleon" (not "napolon") — JS \w is ASCII-only, so the
+    // punctuation strip below would otherwise delete the accented letter itself.
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
     .trim()
     .replace(/^(the|a|an)\s+/i, "")
     .replace(/[^\w\s]/g, "")
