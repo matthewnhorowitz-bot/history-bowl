@@ -1,7 +1,7 @@
 import { Server } from "socket.io";
 import { Room, TeamState, getTeams } from "../rooms";
 import { Question, AiLevel } from "../../../shared/types";
-import { judgeAnswer } from "../utils/answerValidator";
+import { judgeAnswer, isAcceptable } from "../utils/answerValidator";
 import { getInitialPool, maybeRefetch } from "../questions/questionCache";
 import { getRandomTrio } from "../questions/categoryCache";
 import { getQ2Pool } from "../questions/bonusCache";
@@ -471,7 +471,7 @@ function handleBonusAnswer(io: Server, room: Room, socketId: string, answer: str
   if (!room.bonusReadingDone) return; // can't answer until the bonus has been fully read
   if (teamOf(room, socketId) !== room.bonusTeamId) return; // only the winning team
   room.bonusAnswered = true;
-  const correct = judgeAnswer(answer, room.currentBonus.answer) === "correct";
+  const correct = isAcceptable(answer, room.currentBonus.answer);
   finishBonus(io, room, correct, answer);
 }
 
@@ -638,7 +638,7 @@ export function submitGameCatAnswer(io: Server, room: Room, socketId: string, an
   room.catAnswered.add(teamId);
 
   const cur = room.catQuestions[room.catIndex];
-  const correct = judgeAnswer(answer, cur.qa.answer) === "correct";
+  const correct = isAcceptable(answer, cur.qa.answer);
   if (correct) {
     award(room, teamId, CATEGORY_SCORE);
     room.catCorrect.add(teamId);

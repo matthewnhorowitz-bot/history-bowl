@@ -1,6 +1,6 @@
 import { Server } from "socket.io";
 import { Room, getTeams } from "../rooms";
-import { judgeAnswer } from "../utils/answerValidator";
+import { isAcceptable } from "../utils/answerValidator";
 import { getRandomTrio } from "../questions/categoryCache";
 import { CATEGORY_TIMER_S, CATEGORY_SCORE, CATEGORY_REVEAL_MS } from "../../../shared/constants";
 import * as E from "../../../shared/events";
@@ -87,7 +87,7 @@ export function submitCategoryAnswer(io: Server, room: Room, socketId: string, a
   const player = room.players.get(socketId);
   if (!player) return;
   const cur = room.catQuestions[room.catIndex];
-  const correct = judgeAnswer(answer, cur.qa.answer) === "correct";
+  const correct = isAcceptable(answer, cur.qa.answer);
 
   if (room.teamPlay) {
     // One answer per team: the first teammate to submit locks it in.

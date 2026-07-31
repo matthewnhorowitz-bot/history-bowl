@@ -33,6 +33,25 @@ as many questions as the bank already holds, so a re-run can't quietly shrink th
 - Correct, later buzz: **+10**
 - Wrong answer: **0** (no penalty) — you're locked out of that question only
 
+## Answer judging
+
+`server/src/utils/answerValidator.ts` reads the writer's instructions out of the
+IAC answer line and rules **correct**, **prompt** (say more — you get another
+try) or **incorrect**. It honours `do not accept` and `prompt on` directives,
+ignores notes aimed at a human moderator ("accept either underlined portion"),
+forgives typos and accents, and requires the regnal number in answers like
+*Henry VIII* or *the First Sino-Japanese War*. A surname identifies a person and
+either party names a court case, but a bare classifier ("battle", "dynasty",
+"convention") never identifies anything. Second Quarter bonuses and Third
+Quarter categories score on one submission with no way to answer a prompt, so a
+promptable answer counts there.
+
+Run the judging tests — every case is a real answer line from the packets:
+
+```bash
+npm test
+```
+
 ## Prerequisites
 
 You need **Node.js 18+** installed (it is not currently on this machine).
@@ -68,7 +87,7 @@ client to `client/dist`, which the server serves automatically.
 
 - `shared/` — types, socket event names, constants shared by client and server
 - `server/src/game/GameController.ts` — game state machine + word-reveal loop + scoring
-- `server/src/utils/answerValidator.ts` — fuzzy answer matching (handles IAC `(or …)` answer lines)
+- `server/src/utils/answerValidator.ts` — answer judging (see above); tests alongside it
 - `server/src/questions/` — bundled IAC questions + shuffler
 - `client/src/hooks/useGame.ts` — all client game state, driven by socket events
 - `client/src/pages/` — Home, Lobby, Game

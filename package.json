@@ -1,11 +1,15 @@
 {
   "name": "history-bowl",
   "private": true,
-  "workspaces": ["client", "server"],
+  "workspaces": [
+    "client",
+    "server"
+  ],
   "scripts": {
     "dev": "concurrently \"npm run dev --workspace=server\" \"npm run dev --workspace=client\"",
     "build": "npm run build --workspace=client",
-    "start": "tsx server/src/index.ts"
+    "start": "tsx server/src/index.ts",
+    "test": "tsx server/src/utils/answerValidator.test.ts"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
