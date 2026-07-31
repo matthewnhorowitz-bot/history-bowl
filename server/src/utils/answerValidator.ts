@@ -93,8 +93,14 @@ const EITHER_PART_RE = /\b(?:either|both)\b[^.;]*\b(?:underlin\w*|names?|portion
 // Normalisation
 // ---------------------------------------------------------------------------
 
+// Drop accents, including the ones the PDFs detach from their letter: 87 answer
+// lines read "Ren´e Descartes" or "Napol´eon III", and treating that mark as a
+// separator would split the name into "Ren" and "e".
 function stripAccents(s: string): string {
-  return s.normalize("NFD").replace(/[̀-ͯ]/g, "");
+  return (s || "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[´`ˆ˜¨ˇ˚¸]/g, "");
 }
 
 // Lowercase, de-accent, and reduce punctuation. Separators become spaces so

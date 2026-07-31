@@ -37,6 +37,20 @@ const basics: Case[] = [
 const orthography: Case[] = [
   ["Napoléon Bonaparte", "Napoleon Bonaparte", "correct"],
   ["Napoléon Bonaparte", "napoleon bonaparte", "correct"],
+  // 87 answer lines carry an accent the PDF detached from its letter.
+  ["Ren´e Descartes [day-KART]", "Descartes", "correct"],
+  ["Ren´e Descartes [day-KART]", "Rene Descartes", "correct"],
+  ["Ren´e Descartes [day-KART]", "René Descartes", "correct"],
+  ["Ren´e Descartes [day-KART]", "Rene", "prompt", "given name alone"],
+  ["Ren´e Descartes [day-KART]", "day-KART", "incorrect", "pronunciation guide"],
+  ["Fr´ed´eric Franc¸ois Chopin (or Fryderyk Franciszek Chopin)", "Chopin", "correct"],
+  ["Albrecht D´urer", "Durer", "correct"],
+  ["Napol´eon III (or Louis-Napol´eon Bonaparte, do not accept or prompt on Napol´eon)", "Napoleon", "incorrect"],
+  ["Napol´eon III (or Louis-Napol´eon Bonaparte, do not accept or prompt on Napol´eon)", "Napoleon III", "correct"],
+  // Real line served by the live site.
+  ["Gaozu of Han (or Liu Bang; accept Han Gaodi)", "Liu Bang", "correct"],
+  ["Gaozu of Han (or Liu Bang; accept Han Gaodi)", "Han Gaodi", "correct"],
+  ["Gaozu of Han (or Liu Bang; accept Han Gaodi)", "Gaozu", "prompt", "which Gaozu?"],
   ["Wade-Davis Bill of 1864 (do not accept mentions of an Act or Law, because it didn't pass)", "Wade-Davis Bill", "correct"],
   ["Wade-Davis Bill of 1864 (do not accept mentions of an Act or Law, because it didn't pass)", "wade davis bill", "correct", "hyphen typed as space"],
   ["Wade-Davis Bill of 1864 (do not accept mentions of an Act or Law, because it didn't pass)", "WadeDavis", "correct"],
