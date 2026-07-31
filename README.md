@@ -6,11 +6,26 @@ the right answer scores. Built with React + Vite (client) and Node.js + Express 
 
 ## Questions
 
-The app ships with **8,465 real tossups** parsed from every IAC National History Bowl packet
-published on the [IAC resources page](https://www.iacompetitions.com/resources-national-history-bowl/)
-(regional A/B/C sets and national championships, 2014–2015 through 2024), bundled in
-`server/src/questions/iacQuestions.json`. Each game serves a freshly shuffled pool, and the
+The app ships with **10,117 real tossups**, 3,125 Second Quarter bonuses and 367 Third Quarter
+category trios, parsed from all 380 IAC National History Bowl packets published on the
+[IAC resources page](https://www.iacompetitions.com/resources-national-history-bowl/)
+(regional A/B/C sets and national championships, 2014–2015 through 2025), bundled in
+`server/src/questions/`. Each game serves a freshly shuffled pool, and the
 power-mark threshold (+15 vs +10) uses the real `(+)`/`(*)` mark from each packet when present.
+
+Lobby difficulty comes from the packet a question was pulled from (see `shared/difficulty.ts`):
+regionals are Easy, Nationals preliminary rounds 1–5 are Medium, and Nationals rounds 6+,
+playoffs and finals are Hard.
+
+To rebuild the banks — after IAC posts a new championship packet, say — run:
+
+```bash
+pip install pdfplumber requests && python tools/build_questions.py
+```
+
+It re-downloads the packet list, parses every PDF (cached in `tools/cache/`, gitignored) and
+rewrites the three JSON files. A packet is only replaced when the fresh parse yields at least
+as many questions as the bank already holds, so a re-run can't quietly shrink the pool.
 
 ## Scoring
 
